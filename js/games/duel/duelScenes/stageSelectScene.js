@@ -1,3 +1,5 @@
+import { drawImageRect } from "../renderUtils.js";
+
 export class StageSelectScene {
   constructor(game) {
     this.game = game;
@@ -38,7 +40,7 @@ export class StageSelectScene {
       p5.stroke(active ? "rgba(220, 255, 250, 0.95)" : "rgba(164, 187, 220, 0.16)");
       p5.rect(x, y, 320, 360, 24);
       if (image) {
-        p5.image(image, x + 18, y + 18, 284, 230);
+        drawImageRect(p5, image, x + 18, y + 18, 284, 230);
       }
       p5.noStroke();
       p5.fill("#f4f7fb");
@@ -76,5 +78,11 @@ export class StageSelectScene {
 
   exit() {}
   getStatusText() { return "Duel - Seleccion de escenario"; }
-  getGestureMap() { return {}; }
+  getGestureMap() {
+    return {
+      OPEN_PALM: "CONFIRM",
+      OPEN_PALM_LEFT: "CONFIRM",
+      OPEN_PALM_RIGHT: "CONFIRM",
+    };
+  }
 }

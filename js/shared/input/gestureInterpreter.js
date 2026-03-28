@@ -44,6 +44,30 @@ function getLandmarks(prediction) {
   return prediction?.landmarks || prediction?.keypoints || prediction?.keypoints3D || null;
 }
 
+function extractHandedness(prediction, landmarks) {
+  const direct = prediction?.handedness || prediction?.label || prediction?.handInViewConfidenceLabel;
+  const category = prediction?.handednesses?.[0]?.categoryName || prediction?.handednesses?.[0]?.label;
+  const raw = category || direct;
+
+  if (typeof raw === "string") {
+    const lowered = raw.toLowerCase();
+    if (lowered.includes("left")) {
+      return "Left";
+    }
+    if (lowered.includes("right")) {
+      return "Right";
+    }
+  }
+
+  const thumb = point(landmarks, 4);
+  const pinky = point(landmarks, 20);
+  if (!thumb || !pinky) {
+    return null;
+  }
+
+  return thumb.x < pinky.x ? "Right" : "Left";
+}
+
 function getExtendedFingers(landmarks) {
   return {
     thumb: thumbExtended(landmarks),
@@ -85,12 +109,16 @@ export class GestureInterpreter {
     const fingers = getExtendedFingers(landmarks);
     const openCount = Object.values(fingers).filter(Boolean).length;
     const direction = estimateDirection(landmarks);
+    const handedness = extractHandedness(prediction, landmarks);
     let label = "NONE";
     let confidence = 0.45;
 
     if (openCount >= 4 && fingers.index && fingers.middle && fingers.ring && fingers.pinky) {
       label = "OPEN_PALM";
       confidence = 0.95;
+    } else if (!fingers.thumb && fingers.index && fingers.middle && fingers.ring && fingers.pinky) {
+      label = "FOUR_FINGERS";
+      confidence = 0.9;
     } else if (fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky) {
       label = direction.direction ?? "NONE";
       confidence = direction.intensity || 0.68;
@@ -106,6 +134,7 @@ export class GestureInterpreter {
       label,
       confidence,
       landmarks,
+      handedness,
       details: { fingers, openCount },
     };
   }

@@ -32,8 +32,8 @@ export class SceneManager {
     this.activeScene?.render?.(p5);
   }
 
-  handleAction(action) {
-    this.activeScene?.handleAction?.(action);
+  handleAction(action, payload) {
+    this.activeScene?.handleAction?.(action, payload);
   }
 
   destroy() {

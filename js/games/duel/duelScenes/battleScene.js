@@ -3,6 +3,7 @@ import { Fighter } from "../entities/fighter.js";
 import { HitEffect } from "../entities/hitEffect.js";
 import { Projectile } from "../entities/projectile.js";
 import { BattleResolver } from "../systems/battleResolver.js";
+import { drawImageRect } from "../renderUtils.js";
 
 const TRANSITIONS = {
   intro: ["prepare"],
@@ -23,7 +24,7 @@ export class BattleScene {
     this.projectiles = [];
     this.result = null;
     this.countdownLabel = "3";
-    this.aiShotAt = null;
+    this.firstShotAt = null;
   }
 
   enter() {
@@ -33,7 +34,7 @@ export class BattleScene {
     this.projectiles = [];
     this.result = null;
     this.countdownLabel = "3";
-    this.aiShotAt = null;
+    this.firstShotAt = null;
     this.fighters = this.buildFighters();
     this.fighters.forEach((fighter) => fighter.setState("normal"));
   }
@@ -89,18 +90,12 @@ export class BattleScene {
     }
 
     if (this.machine.state === "armed" && timeInState >= this.game.config.battle.armedMs) {
-      const { min, max } = this.game.config.battle.opponentReactionMs;
-      this.aiShotAt = min + Math.random() * (max - min);
       this.machine.transition("shoot-window");
       return;
     }
 
     if (this.machine.state === "shoot-window") {
-      if (this.aiShotAt !== null && timeInState >= this.aiShotAt && !this.resolver.validShots.some((shot) => shot.playerId === "right")) {
-        this.resolver.registerShot("right", performance.now(), true);
-      }
-
-      if (this.resolver.validShots.length >= 2) {
+      if (this.firstShotAt !== null && timeInState - this.firstShotAt >= this.game.config.battle.simultaneousMarginMs) {
         this.resolveBattle();
         return;
       }
@@ -143,7 +138,7 @@ export class BattleScene {
       this.result.loser.setState("defeat");
     }
 
-    this.aiShotAt = null;
+    this.firstShotAt = null;
     this.machine.transition("resolve");
   }
 
@@ -174,18 +169,33 @@ export class BattleScene {
     const stage = this.game.assets.shared.backgrounds[this.game.state.selectedStage];
     p5.background("#08111d");
     if (stage) {
-      p5.image(stage, 0, 0, p5.width, p5.height);
+      drawImageRect(p5, stage, 0, 0, p5.width, p5.height);
     }
     const shadow = this.game.assets.shared.shadow;
     if (shadow) {
-      p5.tint(255, 120);
-      p5.image(shadow, 0, 0, p5.width, p5.height);
-      p5.noTint();
+      drawImageRect(p5, shadow, 0, 0, p5.width, p5.height, { alpha: 0.47 });
     }
 
     this.fighters.forEach((fighter) => fighter.draw(p5));
     this.projectiles.forEach((projectile) => projectile.draw(p5));
     this.effects.forEach((effect) => effect.draw(p5));
+
+    p5.push();
+    p5.noStroke();
+    p5.fill("rgba(6, 14, 24, 0.62)");
+    p5.rect(68, 118, 248, 94, 20);
+    p5.rect(p5.width - 316, 118, 248, 94, 20);
+    p5.fill("#f4f7fb");
+    p5.textFont("Space Grotesk");
+    p5.textSize(28);
+    p5.text("Player 1", 96, 154);
+    p5.text("Player 2", p5.width - 288, 154);
+    p5.textFont("IBM Plex Sans");
+    p5.textSize(15);
+    p5.fill("#b5c0d3");
+    p5.text("F o mano abierta izquierda", 96, 182);
+    p5.text("K o mano abierta derecha", p5.width - 288, 182);
+    p5.pop();
 
     p5.push();
     p5.fill("rgba(4, 9, 15, 0.5)");
@@ -219,7 +229,7 @@ export class BattleScene {
       case "armed":
         return "Preparados";
       case "shoot-window":
-        return "Ventana de disparo activa";
+        return "Ventana de disparo activa - solo cuenta el primer tiro";
       case "resolve":
         return this.result?.winner ? `${this.result.winner.label} conecto el disparo` : "Nadie acerto a tiempo";
       default:
@@ -227,21 +237,27 @@ export class BattleScene {
     }
   }
 
-  handleAction(action) {
+  handleAction(action, payload = {}) {
     if (action === "BACK") {
       this.game.sceneManager.change("main-menu");
       return;
     }
 
-    if (action !== "SHOOT") {
+    if (!["SHOOT_LEFT", "SHOOT_RIGHT", "SHOOT"].includes(action)) {
       return;
     }
 
     const now = performance.now();
+    const playerId = action === "SHOOT_RIGHT" ? "right" : "left";
 
     if (this.machine.state === "shoot-window") {
-      if (!this.resolver.validShots.some((shot) => shot.playerId === "left")) {
-        this.resolver.registerShot("left", now, true);
+      if (this.resolver.validShots.some((shot) => shot.playerId === playerId)) {
+        return;
+      }
+
+      this.resolver.registerShot(playerId, payload.at ?? now, true);
+      if (this.firstShotAt === null) {
+        this.firstShotAt = this.machine.timeInState();
       }
 
       if (this.resolver.validShots.length >= 2) {
@@ -249,14 +265,15 @@ export class BattleScene {
       }
       return;
     }
-
-    if (["intro", "prepare", "countdown", "armed"].includes(this.machine.state)) {
-      this.resolver.registerShot("left", now, false);
-      this.resolveBattle();
-    }
   }
 
   exit() {}
   getStatusText() { return "Duel - Combate"; }
-  getGestureMap() { return { OPEN_PALM: "SHOOT" }; }
+  getGestureMap() {
+    return {
+      OPEN_PALM_LEFT: "SHOOT_LEFT",
+      OPEN_PALM_RIGHT: "SHOOT_RIGHT",
+      FOUR_FINGERS: "SHOOT_RIGHT",
+    };
+  }
 }

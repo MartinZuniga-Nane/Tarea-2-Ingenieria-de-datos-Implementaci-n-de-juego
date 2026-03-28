@@ -34,6 +34,8 @@ export class DuelGame {
     this.assets = null;
     this.sceneManager = null;
     this.currentSceneKey = null;
+    this.cameraOverlayCanvas = null;
+    this.runtimeError = null;
   }
 
   mount() {
@@ -43,7 +45,7 @@ export class DuelGame {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Duel...</div>
-            <div class="pill">A/D/W/S - navegar | Enter - confirmar | Space - disparar | Esc - volver</div>
+            <div class="pill">A/D/W/S navegar | Enter confirmar | F dispara P1 | K dispara P2 | Esc volver</div>
           </div>
           <aside class="game-shell__debug ${this.config.debug.enabled ? "" : "hidden"}" data-role="debug-panel">
             <h3>Debug HandPose</h3>
@@ -86,20 +88,27 @@ export class DuelGame {
     }
     this.keyboard.start();
 
+    this.configureScenes();
+    this.sketch = new window.p5(createDuelSketch(this));
+    this.initializeCamera();
+  }
+
+  async initializeCamera() {
     try {
       await this.handpose.init();
-      if (this.config.debug.showVideo && this.handpose.video) {
+      this.modal.hide();
+      if (this.handpose.video) {
+        this.cameraPanel.classList.remove("hidden");
         this.cameraPanel.appendChild(this.handpose.video);
       }
     } catch (error) {
       this.modal.show({
         title: "Camara no disponible",
         message: "El juego seguira funcionando con teclado. Si quieres gestos, habilita permisos de camara y recarga la pagina.",
+        dismissLabel: "Seguir sin camara",
+        autoHideMs: 3200,
       });
     }
-
-    this.configureScenes();
-    this.sketch = new window.p5(createDuelSketch(this));
   }
 
   configureScenes() {
@@ -154,27 +163,29 @@ export class DuelGame {
   }
 
   drawGestureOverlay(p5) {
-    if (!this.config.debug.enabled || !this.config.debug.showVideo) {
+    if (!this.handpose.video || !this.cameraPanel || (!this.config.debug.enabled && this.handpose.status !== "ready")) {
       return;
     }
 
     const snapshot = this.gestureController.getDebugSnapshot();
-    if (!snapshot.landmarks?.length) {
-      return;
-    }
-
     const panel = this.cameraPanel;
-    let canvas = panel.querySelector("canvas");
+    let canvas = this.cameraOverlayCanvas;
     if (!canvas) {
       canvas = document.createElement("canvas");
       canvas.width = 640;
       canvas.height = 480;
+      canvas.className = "game-shell__camera-overlay";
       panel.appendChild(canvas);
+      this.cameraOverlayCanvas = canvas;
     }
 
     const ctx = canvas.getContext("2d");
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "rgba(3, 8, 14, 0.2)";
+    if (!this.config.debug.enabled || !snapshot.landmarks?.length) {
+      return;
+    }
+
+    ctx.fillStyle = "rgba(3, 8, 14, 0.08)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#3ec1b6";
     snapshot.landmarks.forEach((point) => {
@@ -184,6 +195,16 @@ export class DuelGame {
       ctx.arc(canvas.width - x, y, 4, 0, Math.PI * 2);
       ctx.fill();
     });
+  }
+
+  handleRuntimeError(error) {
+    this.runtimeError = error;
+    this.modal.show({
+      title: "Error de render en Duel",
+      message: error.message,
+      dismissLabel: "Cerrar",
+    });
+    console.error(error);
   }
 
   goToLauncher() {
@@ -196,5 +217,6 @@ export class DuelGame {
     this.sceneManager?.destroy();
     this.sketch?.remove();
     this.modal?.hide();
+    this.cameraOverlayCanvas?.remove();
   }
 }

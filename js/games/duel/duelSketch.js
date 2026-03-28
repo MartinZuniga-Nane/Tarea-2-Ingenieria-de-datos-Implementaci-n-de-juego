@@ -13,11 +13,16 @@ export function createDuelSketch(game) {
     };
 
     p5.draw = () => {
-      const now = performance.now();
-      const dt = now - lastTime;
-      lastTime = now;
-      game.update(dt, p5);
-      game.render(p5);
+      try {
+        const now = performance.now();
+        const dt = now - lastTime;
+        lastTime = now;
+        game.update(dt, p5);
+        game.render(p5);
+      } catch (error) {
+        p5.noLoop();
+        game.handleRuntimeError?.(error);
+      }
     };
 
     p5.windowResized = () => resizeCanvas();

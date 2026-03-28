@@ -5,6 +5,8 @@ const KEY_ACTIONS = {
   KeyS: "NAV_DOWN",
   Enter: "CONFIRM",
   Space: "SHOOT",
+  KeyF: "SHOOT_LEFT",
+  KeyK: "SHOOT_RIGHT",
   Escape: "BACK",
 };
 

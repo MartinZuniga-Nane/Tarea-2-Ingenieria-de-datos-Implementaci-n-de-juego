@@ -1,3 +1,5 @@
+import { drawImageCentered } from "../renderUtils.js";
+
 export class Fighter {
   constructor({ id, label, side, modelId, sprites, layout }) {
     this.id = id;
@@ -34,15 +36,12 @@ export class Fighter {
     const height = this.layout.base.height * scale;
 
     p5.push();
-    p5.imageMode(p5.CENTER);
-    p5.tint(255, alpha * 255);
 
     if (sprite) {
-      p5.translate(x, y);
-      if (this.side === "right") {
-        p5.scale(-1, 1);
-      }
-      p5.image(sprite, 0, 0, width, height);
+      drawImageCentered(p5, sprite, x, y, width, height, {
+        alpha,
+        flipX: this.side === "right",
+      });
     } else {
       p5.noStroke();
       p5.fill(this.side === "left" ? "#3ec1b6" : "#ff7676");

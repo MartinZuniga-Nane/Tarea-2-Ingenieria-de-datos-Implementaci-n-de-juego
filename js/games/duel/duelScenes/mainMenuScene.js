@@ -1,11 +1,12 @@
 import { MenuButton } from "../../../shared/ui/menuButton.js";
+import { drawImageCentered, drawImageRect } from "../renderUtils.js";
 
 export class MainMenuScene {
   constructor(game) {
     this.game = game;
     this.buttons = [
-      new MenuButton({ label: "Jugar", x: 240, y: 390, width: 310, height: 84, description: "Seleccion de jugadores y escenario" }),
-      new MenuButton({ label: "Controles", x: 240, y: 490, width: 310, height: 84, description: "Ver gestos disponibles otra vez" }),
+      new MenuButton({ label: "Jugar", x: 340, y: 440, width: 400, height: 88, description: "Seleccion de jugadores y escenario" }),
+      new MenuButton({ label: "Controles", x: 340, y: 546, width: 400, height: 88, description: "Ver gestos disponibles otra vez" }),
     ];
     this.activeIndex = 0;
   }
@@ -21,9 +22,7 @@ export class MainMenuScene {
     p5.background("#08111d");
 
     if (background) {
-      p5.tint(255, 85);
-      p5.image(background, 0, 0, p5.width, p5.height);
-      p5.noTint();
+      drawImageRect(p5, background, 0, 0, p5.width, p5.height, { alpha: 0.33 });
     }
 
     p5.push();
@@ -31,15 +30,18 @@ export class MainMenuScene {
     p5.fill("rgba(4, 9, 15, 0.48)");
     p5.rect(0, 0, p5.width, p5.height);
     p5.fill("rgba(6, 14, 24, 0.82)");
-    p5.rect(80, 70, 420, p5.height - 140, 28);
+    p5.rect(120, 60, 520, p5.height - 120, 32);
     p5.pop();
 
     const logo = this.game.assets.shared.logo;
+    p5.push();
+    p5.noStroke();
+    p5.fill("rgba(8, 16, 28, 0.78)");
+    p5.rect(720, 116, 412, 238, 28);
+    p5.pop();
+
     if (logo) {
-      p5.push();
-      p5.imageMode(p5.CENTER);
-      p5.image(logo, 860, 220, 420, 220);
-      p5.pop();
+      drawImageCentered(p5, logo, 926, 235, 360, 190);
     } else {
       p5.push();
       p5.fill("#f4f7fb");
@@ -54,11 +56,11 @@ export class MainMenuScene {
     p5.fill("#f4f7fb");
     p5.textFont("Space Grotesk");
     p5.textSize(56);
-    p5.text("Duel", 130, 148);
+    p5.text("Duel", 176, 156);
     p5.textFont("IBM Plex Sans");
     p5.textSize(18);
     p5.fill("#b5c0d3");
-    p5.text("Duelo visual de reflejos. Elige combatientes, escenario y dispara con el gesto correcto en el momento exacto.", 130, 188, 320);
+    p5.text("Duelo visual 1v1 local. Elige combatientes, escenario y dispara con el gesto correcto en el momento exacto.", 176, 202, 360);
     p5.pop();
 
     this.buttons.forEach((button, index) => button.draw(p5, { active: index === this.activeIndex }));
@@ -88,5 +90,11 @@ export class MainMenuScene {
 
   exit() {}
   getStatusText() { return "Duel - Menu principal"; }
-  getGestureMap() { return {}; }
+  getGestureMap() {
+    return {
+      OPEN_PALM: "CONFIRM",
+      OPEN_PALM_LEFT: "CONFIRM",
+      OPEN_PALM_RIGHT: "CONFIRM",
+    };
+  }
 }

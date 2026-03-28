@@ -1,3 +1,5 @@
+import { drawImageCentered } from "../renderUtils.js";
+
 export class HitEffect {
   constructor({ image, position, duration = 320, scale = 1, delay = 0 }) {
     this.image = image;
@@ -24,10 +26,10 @@ export class HitEffect {
     const life = 1 - (this.elapsed - this.delay) / this.duration;
 
     p5.push();
-    p5.imageMode(p5.CENTER);
-    p5.tint(255, life * 255);
     if (this.image) {
-      p5.image(this.image, this.position.x, this.position.y, 160 * this.scale, 160 * this.scale);
+      drawImageCentered(p5, this.image, this.position.x, this.position.y, 160 * this.scale, 160 * this.scale, {
+        alpha: life,
+      });
     } else {
       p5.noStroke();
       p5.fill(255, 208, 129, 220 * life);

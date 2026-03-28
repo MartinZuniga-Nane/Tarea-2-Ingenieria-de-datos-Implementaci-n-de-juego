@@ -51,6 +51,26 @@
   display: block;
 }
 
+.game-shell__camera {
+  aspect-ratio: 4 / 3;
+}
+
+.game-shell__camera video,
+.game-shell__camera-overlay {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-shell__camera video {
+  transform: scaleX(-1);
+}
+
+.game-shell__camera-overlay {
+  pointer-events: none;
+}
+
 .game-shell__debug {
   position: absolute;
   left: 1rem;
@@ -102,6 +122,12 @@
 .modal__card p {
   margin: 0;
   color: var(--text-soft);
+}
+
+.modal__actions {
+  margin-top: 1rem;
+  display: flex;
+  justify-content: flex-end;
 }
 
 @media (max-width: 900px) {

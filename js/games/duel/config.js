@@ -46,11 +46,11 @@ export const duelConfig = {
     },
   },
   fighter: {
-    left: { x: 318, y: 520, width: 280, height: 280 },
-    right: { x: 965, y: 520, width: 280, height: 280 },
+    left: { x: 334, y: 532, width: 228, height: 228 },
+    right: { x: 946, y: 532, width: 228, height: 228 },
     effectOffsets: {
-      left: { attack: { x: 118, y: -48 }, hit: { x: 92, y: -42 } },
-      right: { attack: { x: -118, y: -48 }, hit: { x: -92, y: -42 } },
+      left: { attack: { x: 92, y: -42 }, hit: { x: 70, y: -38 } },
+      right: { attack: { x: -92, y: -42 }, hit: { x: -70, y: -38 } },
     },
   },
 };

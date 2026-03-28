@@ -26,6 +26,10 @@ export class HandposeAdapter {
   }
 
   async createVideoElement() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Este navegador no soporta acceso a camara");
+    }
+
     const video = document.createElement("video");
     video.setAttribute("playsinline", "true");
     video.setAttribute("autoplay", "true");
@@ -55,21 +59,23 @@ export class HandposeAdapter {
     }
 
     if (typeof window.ml5.handPose === "function") {
-      return window.ml5.handPose({
-        maxHands: 1,
+      const options = {
+        maxHands: 2,
         flipped: true,
         runtime: "mediapipe",
-      });
+      };
+
+      return this.withTimeout(this.resolveHandPoseModel(options), 12000, "HandPose tardo demasiado en cargar");
     }
 
     if (typeof window.ml5.handpose === "function") {
-      return new Promise((resolve, reject) => {
+      return this.withTimeout(new Promise((resolve, reject) => {
         try {
           const model = window.ml5.handpose(this.video, { flipHorizontal: true }, () => resolve(model));
         } catch (error) {
           reject(error);
         }
-      });
+      }), 12000, "handpose tardo demasiado en cargar");
     }
 
     throw new Error("La version actual de ml5 no expone HandPose/handpose");
@@ -113,6 +119,38 @@ export class HandposeAdapter {
     }
   }
 
+  async resolveHandPoseModel(options) {
+    const attempts = [
+      () => window.ml5.handPose(this.video, options),
+      () => window.ml5.handPose(options),
+    ];
+
+    let lastError = null;
+
+    for (const attempt of attempts) {
+      try {
+        const result = attempt();
+        const model = await Promise.resolve(result);
+        if (model) {
+          return model;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+
+    throw lastError ?? new Error("No fue posible inicializar HandPose");
+  }
+
+  withTimeout(promise, timeoutMs, message) {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        window.setTimeout(() => reject(new Error(message)), timeoutMs);
+      }),
+    ]);
+  }
+
   onPrediction(listener) {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -124,6 +162,10 @@ export class HandposeAdapter {
 
   getPrimaryPrediction() {
     return this.predictions[0] ?? null;
+  }
+
+  getPredictions() {
+    return [...this.predictions];
   }
 
   getDetectionState() {

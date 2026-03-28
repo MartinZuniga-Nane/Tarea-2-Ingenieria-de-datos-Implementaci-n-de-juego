@@ -1,4 +1,5 @@
 import { SelectionSystem } from "../systems/selectionSystem.js";
+import { drawImageCentered, drawImageRect } from "../renderUtils.js";
 
 export class PlayerSelectScene {
   constructor(game) {
@@ -18,9 +19,7 @@ export class PlayerSelectScene {
     p5.background("#08111d");
     const bg = this.game.assets.shared.menuBackground;
     if (bg) {
-      p5.tint(255, 60);
-      p5.image(bg, 0, 0, p5.width, p5.height);
-      p5.noTint();
+      drawImageRect(p5, bg, 0, 0, p5.width, p5.height, { alpha: 0.24 });
     }
 
     const selection = this.selector.getSelection();
@@ -41,27 +40,27 @@ export class PlayerSelectScene {
     p5.fill("#f4f7fb");
     p5.textFont("Space Grotesk");
     p5.textSize(42);
-    p5.text(`Seleccionando ${this.currentSlot === "left" ? "Player 1" : "Player 2"}`, 104, 96);
+    p5.text(`Seleccionando ${this.currentSlot === "left" ? "Player 1" : "Player 2"}`, 110, 100);
     p5.textFont("IBM Plex Sans");
     p5.textSize(18);
     p5.fill("#b5c0d3");
-    p5.text("Usa izquierda o derecha para elegir el modelo. Ambos players pueden usar el mismo o uno diferente.", 104, 146, 560);
+    p5.text("Usa izquierda o derecha para elegir el modelo. Ambos players pueden usar el mismo o uno diferente.", 110, 154, 560);
     p5.pop();
 
     p5.push();
     p5.fill("rgba(14, 24, 39, 0.92)");
     p5.stroke("rgba(164, 187, 220, 0.16)");
-    p5.rect(104, 220, 520, 128, 20);
-    p5.rect(104, 380, 520, 164, 20);
+    p5.rect(110, 226, 540, 132, 22);
+    p5.rect(110, 386, 540, 150, 22);
     p5.pop();
 
     this.game.config.playerSelect.models.forEach((option, index) => {
       const active = modelIndex === index;
       this.drawOptionCard(p5, {
-        x: 134 + index * 246,
-        y: 244,
-        width: 214,
-        height: 84,
+        x: 146 + index * 250,
+        y: 252,
+        width: 224,
+        height: 88,
         title: option.title,
         subtitle: option.description,
         active,
@@ -69,33 +68,33 @@ export class PlayerSelectScene {
       });
     });
 
-    this.drawLockedPlayerCard(p5, 134, 404, "Player 1", lockedLeft, this.currentSlot === "left");
-    this.drawLockedPlayerCard(p5, 384, 404, "Player 2", lockedRight, this.currentSlot === "right");
+    this.drawLockedPlayerCard(p5, 146, 410, "Player 1", lockedLeft, this.currentSlot === "left");
+    this.drawLockedPlayerCard(p5, 406, 410, "Player 2", lockedRight, this.currentSlot === "right");
 
     p5.push();
     p5.fill("rgba(10, 18, 31, 0.88)");
     p5.stroke("rgba(164, 187, 220, 0.16)");
-    p5.rect(684, 124, 500, 500, 24);
+    p5.rect(708, 110, 470, 520, 24);
+    p5.line(742, 242, 1140, 242);
     p5.pop();
 
     if (preview) {
-      p5.push();
-      p5.imageMode(p5.CENTER);
-      p5.image(preview, 934, 360, 320, 320);
-      p5.pop();
+      drawImageCentered(p5, preview, 943, 388, 270, 270, {
+        flipX: this.currentSlot === "right",
+      });
     }
 
     p5.push();
     p5.fill("#f4f7fb");
     p5.textFont("Space Grotesk");
     p5.textSize(34);
-    p5.text(model.title, 724, 158);
+    p5.text(model.title, 742, 154);
     p5.textFont("IBM Plex Sans");
     p5.textSize(18);
     p5.fill("#b5c0d3");
-    p5.text(`Modelo activo: ${model.title}`, 724, 204);
-    p5.text(this.currentSlot === "left" ? "Esta eleccion ocupara el lado izquierdo." : "Esta eleccion ocupara el lado derecho.", 724, 232);
-    p5.text("Confirma para bloquear el modelo y pasar al siguiente jugador. Luego podras agregar mas modelos sin cambiar el flujo.", 724, 260, 380);
+    p5.text(`Modelo activo: ${model.title}`, 742, 192);
+    p5.text(this.currentSlot === "left" ? "Esta eleccion ocupara el lado izquierdo." : "Esta eleccion ocupara el lado derecho.", 742, 220);
+    p5.text("Confirma para bloquear el modelo y pasar al siguiente jugador.", 742, 258, 360);
     p5.pop();
   }
 
@@ -104,7 +103,7 @@ export class PlayerSelectScene {
     p5.push();
     p5.fill(activeTurn ? "rgba(62, 193, 182, 0.18)" : "rgba(17, 28, 45, 0.72)");
     p5.stroke(activeTurn ? "rgba(220, 255, 250, 0.95)" : "rgba(164, 187, 220, 0.16)");
-    p5.rect(x, y, 220, 112, 18);
+    p5.rect(x, y, 230, 100, 18);
     p5.noStroke();
     p5.fill("#f4f7fb");
     p5.textFont("Space Grotesk");
@@ -113,7 +112,7 @@ export class PlayerSelectScene {
     p5.textFont("IBM Plex Sans");
     p5.textSize(15);
     p5.fill("#b5c0d3");
-    p5.text(model?.title ?? "Sin elegir", x + 18, y + 58, 180);
+    p5.text(model?.title ?? "Sin elegir", x + 18, y + 56, 190);
     p5.pop();
   }
 
@@ -161,5 +160,11 @@ export class PlayerSelectScene {
 
   exit() {}
   getStatusText() { return "Duel - Seleccion de personajes"; }
-  getGestureMap() { return {}; }
+  getGestureMap() {
+    return {
+      OPEN_PALM: "CONFIRM",
+      OPEN_PALM_LEFT: "CONFIRM",
+      OPEN_PALM_RIGHT: "CONFIRM",
+    };
+  }
 }

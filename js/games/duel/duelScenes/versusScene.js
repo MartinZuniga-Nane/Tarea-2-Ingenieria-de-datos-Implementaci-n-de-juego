@@ -1,5 +1,6 @@
 import { Fighter } from "../entities/fighter.js";
 import { AnimationSystem } from "../systems/animationSystem.js";
+import { drawImageRect } from "../renderUtils.js";
 
 export class VersusScene {
   constructor(game) {
@@ -50,16 +51,20 @@ export class VersusScene {
     const stage = this.game.assets.shared.backgrounds[this.game.state.selectedStage];
     p5.background("#08111d");
     if (stage) {
-      p5.tint(255, 110);
-      p5.image(stage, 0, 0, p5.width, p5.height);
-      p5.noTint();
+      drawImageRect(p5, stage, 0, 0, p5.width, p5.height, { alpha: 0.43 });
     }
 
     const t = AnimationSystem.easeOutCubic(AnimationSystem.normalized(this.elapsed, 1200));
     const overlayAlpha = 1 - AnimationSystem.normalized(this.elapsed, 1800);
 
-    this.fighters[0]?.draw(p5, { slide: 1 - t, scale: 1.02 });
-    this.fighters[1]?.draw(p5, { slide: 1 - t, scale: 1.02 });
+    this.fighters[0]?.draw(p5, { slide: 1 - t, scale: 0.92 });
+    this.fighters[1]?.draw(p5, { slide: 1 - t, scale: 0.92 });
+
+    p5.push();
+    p5.noStroke();
+    p5.fill("rgba(3, 8, 14, 0.24)");
+    p5.rect(94, 92, p5.width - 188, p5.height - 144, 30);
+    p5.pop();
 
     p5.push();
     p5.textAlign(p5.CENTER, p5.CENTER);
@@ -68,8 +73,8 @@ export class VersusScene {
     p5.fill(244, 247, 251, 220);
     p5.text("VERSUS", p5.width / 2, 110);
     p5.textSize(24);
-    p5.text("Player 1", 250, 120);
-    p5.text("Player 2", p5.width - 250, 120);
+    p5.text("Player 1", 240, 132);
+    p5.text("Player 2", p5.width - 240, 132);
     p5.pop();
 
     p5.push();

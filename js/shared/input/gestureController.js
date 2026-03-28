@@ -19,6 +19,8 @@ export class GestureController {
       navigation: options.navigationCooldownMs ?? 220,
       confirm: options.confirmCooldownMs ?? 650,
       shoot: options.shootCooldownMs ?? 650,
+      "shoot-left": options.shootCooldownMs ?? 650,
+      "shoot-right": options.shootCooldownMs ?? 650,
     });
     this.stableLabel = "NONE";
     this.candidateLabel = "NONE";
@@ -32,41 +34,58 @@ export class GestureController {
   }
 
   update(now = performance.now()) {
-    const prediction = this.adapter.getPrimaryPrediction();
-    const interpretation = this.interpreter.interpret(prediction);
-    this.lastInterpretation = interpretation;
+    const actions = [];
 
-    if (interpretation.label !== this.candidateLabel) {
-      this.candidateLabel = interpretation.label;
+    const predictions = this.adapter.getPredictions?.() ?? [this.adapter.getPrimaryPrediction()].filter(Boolean);
+    const interpretations = predictions.map((prediction) => this.interpreter.interpret(prediction));
+    const primary = interpretations[0] ?? { label: "NONE", confidence: 0, landmarks: null, handedness: null };
+    this.lastInterpretation = primary;
+
+    const battleGesture = interpretations.find((entry) => this.mapGestureToAction(this.getGestureKey(entry)));
+    const interpretation = battleGesture ?? primary;
+    const gestureKey = this.getGestureKey(interpretation);
+
+    if (gestureKey !== this.candidateLabel) {
+      this.candidateLabel = gestureKey;
       this.candidateSince = now;
     }
 
-    const actions = [];
-
     if (
-      interpretation.label !== "NONE" &&
-      interpretation.label === this.candidateLabel &&
+      gestureKey !== "NONE" &&
+      gestureKey === this.candidateLabel &&
       now - this.candidateSince >= this.persistenceMs &&
-      this.stableLabel !== interpretation.label
+      this.stableLabel !== gestureKey
     ) {
-      this.stableLabel = interpretation.label;
-      const action = this.mapGestureToAction(interpretation.label);
+      this.stableLabel = gestureKey;
+      const action = this.mapGestureToAction(gestureKey) ?? this.mapGestureToAction(interpretation.label);
 
       if (action) {
         const group = this.resolveCooldownGroup(action);
         if (this.cooldowns.canTrigger(group, now)) {
           this.cooldowns.trigger(group, now);
           this.lastAction = action;
-          actions.push({ source: "gesture", action, at: now });
+          actions.push({ source: "gesture", action, at: now, handedness: interpretation.handedness ?? null });
         }
       }
     }
 
-    if (interpretation.label === "NONE") {
+    if (gestureKey === "NONE") {
       this.stableLabel = "NONE";
     }
 
     return actions;
+  }
+
+  getGestureKey(interpretation) {
+    if (!interpretation || interpretation.label === "NONE") {
+      return "NONE";
+    }
+
+    if (interpretation.label === "OPEN_PALM" && interpretation.handedness) {
+      return `OPEN_PALM_${interpretation.handedness.toUpperCase()}`;
+    }
+
+    return interpretation.label;
   }
 
   mapGestureToAction(label) {
@@ -80,6 +99,14 @@ export class GestureController {
 
     if (action === "SHOOT") {
       return "shoot";
+    }
+
+    if (action === "SHOOT_LEFT") {
+      return "shoot-left";
+    }
+
+    if (action === "SHOOT_RIGHT") {
+      return "shoot-right";
     }
 
     return "navigation";
