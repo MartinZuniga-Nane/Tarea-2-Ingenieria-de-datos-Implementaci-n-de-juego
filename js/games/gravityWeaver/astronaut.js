@@ -1,3 +1,11 @@
+function getDrawableSource(image) {
+  if (!image) {
+    return null;
+  }
+
+  return image.canvas || image.elt || image;
+}
+
 export class Astronaut {
   constructor({ x, y, radius }) {
     this.radius = radius;
@@ -49,7 +57,17 @@ export class Astronaut {
     }
   }
 
-  draw(p5, astronautConfig) {
+  draw(p5, {
+    astronautConfig,
+    spriteSheet = null,
+    spriteFrame = null,
+    flipX = false,
+    rotation = 0,
+    scaleX = 1,
+    scaleY = 1,
+    boostWeight = 0,
+    impactFlashAlpha = 0,
+  }) {
     p5.push();
     p5.noFill();
 
@@ -58,22 +76,53 @@ export class Astronaut {
       const prev = this.trail[index - 1];
       const node = this.trail[index];
       const alpha = index / this.trail.length;
-      p5.stroke(`rgba(93, 243, 255, ${0.04 + alpha * 0.2})`);
-      p5.strokeWeight(1.2 + alpha * 4.5);
+      p5.stroke(`rgba(93, 243, 255, ${0.04 + alpha * (0.2 + boostWeight * 0.12)})`);
+      p5.strokeWeight(1.2 + alpha * (4.5 + boostWeight * 1.6));
       p5.line(prev.x, prev.y, node.x, node.y);
     }
     p5.pop();
 
+    const spriteSource = getDrawableSource(spriteSheet);
+    const hasSprite = Boolean(spriteSource && spriteFrame && spriteFrame.width > 0 && spriteFrame.height > 0);
     const ctx = p5.drawingContext;
     p5.push();
-    ctx.shadowBlur = 24;
+    ctx.shadowBlur = hasSprite ? 14 : 24;
     ctx.shadowColor = astronautConfig.glowColor;
-    p5.noStroke();
-    p5.fill(astronautConfig.color);
-    p5.circle(this.position.x, this.position.y, this.radius * 2);
 
-    p5.fill("rgba(255, 255, 255, 0.74)");
-    p5.circle(this.position.x - this.radius * 0.25, this.position.y - this.radius * 0.28, this.radius * 0.7);
+    if (hasSprite) {
+      p5.imageMode(p5.CENTER);
+      p5.translate(this.position.x, this.position.y);
+      p5.rotate(rotation);
+      const signedScaleX = (flipX ? -1 : 1) * scaleX;
+      p5.scale(signedScaleX, scaleY);
+      const width = spriteFrame.width * astronautConfig.spriteScale;
+      const height = spriteFrame.height * astronautConfig.spriteScale;
+      ctx.drawImage(
+        spriteSource,
+        spriteFrame.x,
+        spriteFrame.y,
+        spriteFrame.width,
+        spriteFrame.height,
+        -width / 2,
+        -height / 2,
+        width,
+        height,
+      );
+
+      if (impactFlashAlpha > 0) {
+        p5.noStroke();
+        p5.fill(`rgba(197, 243, 255, ${impactFlashAlpha})`);
+        p5.ellipse(0, 0, width * 0.85, height * 0.85);
+      }
+    } else {
+      p5.noStroke();
+      p5.fill(astronautConfig.color);
+      p5.circle(this.position.x, this.position.y, this.radius * 2);
+
+      p5.fill("rgba(255, 255, 255, 0.74)");
+      p5.circle(this.position.x - this.radius * 0.25, this.position.y - this.radius * 0.28, this.radius * 0.7);
+    }
+
     p5.pop();
 
     ctx.shadowBlur = 0;

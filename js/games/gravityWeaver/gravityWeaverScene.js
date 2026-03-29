@@ -1,6 +1,7 @@
 import { Modal } from "../../shared/ui/modal.js";
 import { Astronaut } from "./astronaut.js";
 import { gravityWeaverConfig } from "./config.js";
+import { loadGravityWeaverAssets } from "./gravityWeaverAssets.js";
 import { LevelManager } from "./levelManager.js";
 import { gravityWeaverLevels } from "./levels.js";
 
@@ -23,6 +24,14 @@ function formatMs(milliseconds) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+}
+
+function getDrawableSource(image) {
+  if (!image) {
+    return null;
+  }
+
+  return image.canvas || image.elt || image;
 }
 
 export class GravityWeaverScene {
@@ -50,6 +59,11 @@ export class GravityWeaverScene {
     this.levelManager = new LevelManager(this.config);
     this.levelManager.loadLevel(this.levels[0]);
 
+    this.assets = {
+      images: {},
+      missing: [],
+    };
+
     this.currentGravity = { x: 0, y: 0 };
     this.targetGravity = { x: 0, y: 0 };
     this.predictedVector = { x: 0, y: 0 };
@@ -59,6 +73,22 @@ export class GravityWeaverScene {
     this.state = "idle";
     this.stateMessage = "Inicializando Gravity Weaver...";
     this.mlState = "idle";
+
+    this.animation = {
+      state: "idle",
+      baseState: "idle",
+      frameIndex: 0,
+      elapsedMs: 0,
+      holdUntil: 0,
+      flipX: false,
+      boostWeight: 0,
+      impactUntil: 0,
+      tilt: 0,
+      impactFlashAlpha: 0,
+      screenShakeUntil: 0,
+      screenShakeStrength: 0,
+      gravityDelta: 0,
+    };
 
     this.starLayers = {
       near: [],
@@ -99,6 +129,8 @@ export class GravityWeaverScene {
               <dt>Nivel</dt><dd data-role="level-name">-</dd>
               <dt>Entrada</dt><dd data-role="input-source">-</dd>
               <dt>Etiqueta ML</dt><dd data-role="ml-label">-</dd>
+              <dt>Animacion</dt><dd data-role="anim-state">-</dd>
+              <dt>Boost</dt><dd data-role="boost-weight">0.00</dd>
               <dt>Gravedad objetivo</dt><dd data-role="gravity-target">0.00, 0.00</dd>
               <dt>Gravedad actual</dt><dd data-role="gravity-current">0.00, 0.00</dd>
               <dt>Tiempo</dt><dd data-role="level-time">00:00</dd>
@@ -134,7 +166,18 @@ export class GravityWeaverScene {
   async start() {
     const p5Promise = window.__p5Ready ?? (window.p5 ? Promise.resolve(window.p5) : Promise.reject(new Error("p5.js no pudo cargarse")));
     const ml5Promise = window.__ml5Ready ?? (window.ml5 ? Promise.resolve(window.ml5) : Promise.reject(new Error("ml5.js no pudo cargarse")));
-    await Promise.all([p5Promise, ml5Promise]);
+    const assetsPromise = loadGravityWeaverAssets(this.config);
+
+    const [assets] = await Promise.all([
+      assetsPromise,
+      p5Promise,
+      ml5Promise,
+    ]);
+
+    this.assets = assets;
+    if (this.assets.missing.length > 0) {
+      console.warn("Gravity Weaver assets faltantes:", this.assets.missing);
+    }
 
     this.setupKeyboardListeners();
     this.generateStars();
@@ -163,8 +206,8 @@ export class GravityWeaverScene {
           const now = performance.now();
           const dt = clamp((now - lastTime) / 1000, 0, 0.042);
           lastTime = now;
-          this.update(dt);
-          this.render(p5);
+          this.update(dt, now);
+          this.render(p5, now);
         } catch (error) {
           p5.noLoop();
           this.handleRuntimeError(error);
@@ -208,6 +251,15 @@ export class GravityWeaverScene {
     this.targetGravity.x = 0;
     this.targetGravity.y = 0;
 
+    this.animation.state = "idle";
+    this.animation.baseState = "idle";
+    this.animation.frameIndex = 0;
+    this.animation.elapsedMs = 0;
+    this.animation.boostWeight = 0;
+    this.animation.impactUntil = 0;
+    this.animation.impactFlashAlpha = 0;
+    this.animation.holdUntil = performance.now();
+
     this.updateStatusText();
     this.updateDebugPanel();
   }
@@ -216,7 +268,7 @@ export class GravityWeaverScene {
     return this.levels[this.levelIndex];
   }
 
-  update(dtSeconds) {
+  update(dtSeconds, now) {
     if (this.state === "error") {
       return;
     }
@@ -238,9 +290,13 @@ export class GravityWeaverScene {
       this.targetGravity.y = this.predictedVector.y;
     }
 
+    const deltaX = this.targetGravity.x - this.currentGravity.x;
+    const deltaY = this.targetGravity.y - this.currentGravity.y;
+    this.animation.gravityDelta = Math.hypot(deltaX, deltaY);
+
     const lerpFactor = 1 - Math.pow(1 - this.config.physics.gravityLerp, dtSeconds * 60);
-    this.currentGravity.x += (this.targetGravity.x - this.currentGravity.x) * lerpFactor;
-    this.currentGravity.y += (this.targetGravity.y - this.currentGravity.y) * lerpFactor;
+    this.currentGravity.x += deltaX * lerpFactor;
+    this.currentGravity.y += deltaY * lerpFactor;
 
     this.astronaut.applyForce({
       x: this.currentGravity.x * this.config.physics.gravityForce,
@@ -251,15 +307,127 @@ export class GravityWeaverScene {
     const collisionsInFrame = this.levelManager.resolveCollisions(this.astronaut);
     this.metrics.collisions += collisionsInFrame;
 
+    if (collisionsInFrame > 0) {
+      this.animation.impactUntil = now + this.config.assets.impactMs;
+      this.animation.screenShakeUntil = now + this.config.assets.impactMs;
+      this.animation.screenShakeStrength = 2.6;
+    }
+
+    this.resolveAnimationState(now);
+    this.advanceAnimation(dtSeconds * 1000, now);
+
     if (this.levelManager.checkPortal(this.astronaut)) {
-      this.completeCurrentLevel();
+      this.completeCurrentLevel(now);
     }
 
     this.updateDebugPanel();
   }
 
-  completeCurrentLevel() {
-    const now = performance.now();
+  resolveAnimationState(now) {
+    const velocity = this.astronaut.velocity;
+    const speed = Math.hypot(velocity.x, velocity.y);
+    const gravityMagnitude = Math.hypot(this.currentGravity.x, this.currentGravity.y);
+    const boostTarget = (
+      gravityMagnitude > this.config.assets.boostThreshold
+      || this.animation.gravityDelta > this.config.assets.gravityDeltaThreshold
+    ) ? 1 : 0;
+
+    const boostLerp = boostTarget > this.animation.boostWeight ? 0.2 : 0.1;
+    this.animation.boostWeight += (boostTarget - this.animation.boostWeight) * boostLerp;
+    this.animation.boostWeight = clamp(this.animation.boostWeight, 0, 1);
+
+    let baseState = "idle";
+    if (speed > this.config.assets.deadzoneSpeed) {
+      if (Math.abs(velocity.x) >= Math.abs(velocity.y)) {
+        baseState = velocity.x < 0 ? "left" : "right";
+      } else {
+        baseState = velocity.y < 0 ? "up" : "down";
+      }
+    }
+
+    this.animation.baseState = baseState;
+
+    let nextState = baseState;
+    if (now < this.animation.impactUntil) {
+      nextState = "impact";
+    } else if (this.animation.boostWeight > 0.55 && baseState !== "idle") {
+      nextState = "boost";
+    }
+
+    const holdElapsed = now >= this.animation.holdUntil;
+    if (nextState !== this.animation.state && (holdElapsed || nextState === "impact")) {
+      this.animation.state = nextState;
+      this.animation.frameIndex = 0;
+      this.animation.elapsedMs = 0;
+      this.animation.holdUntil = now + this.config.assets.stateHoldMs;
+    }
+
+    const targetTilt = clamp(velocity.x / this.config.physics.maxSpeed, -1, 1)
+      * (this.config.assets.tiltMaxDeg * Math.PI / 180);
+    this.animation.tilt += (targetTilt - this.animation.tilt) * this.config.assets.tiltLerp;
+  }
+
+  advanceAnimation(dtMs, now) {
+    const spriteResolution = this.resolveSpriteFrames(this.animation.state);
+    const frames = spriteResolution.frames;
+    this.animation.flipX = spriteResolution.flip;
+
+    if (!frames || frames.length === 0) {
+      this.animation.frameIndex = 0;
+      this.animation.elapsedMs = 0;
+      return;
+    }
+
+    const frameDuration = this.config.assets.frameDurationByState[this.animation.state] ?? this.config.assets.frameDurationMs;
+    this.animation.elapsedMs += dtMs;
+    while (this.animation.elapsedMs >= frameDuration) {
+      this.animation.elapsedMs -= frameDuration;
+      this.animation.frameIndex = (this.animation.frameIndex + 1) % frames.length;
+    }
+
+    const impactLeft = Math.max(0, this.animation.impactUntil - now);
+    const impactDuration = Math.max(1, this.config.assets.impactMs);
+    const impactRatio = impactLeft / impactDuration;
+    this.animation.impactFlashAlpha = impactRatio * this.config.assets.impactFlashAlpha;
+
+    if (now >= this.animation.screenShakeUntil) {
+      this.animation.screenShakeStrength = 0;
+    }
+  }
+
+  resolveSpriteFrames(state) {
+    const map = this.config.assets.spriteMap;
+    if (state === "right" && this.config.assets.flipRightFromLeft && !map.right?.length) {
+      return {
+        frames: map.left ?? map.idle,
+        flip: true,
+      };
+    }
+
+    return {
+      frames: map[state] ?? map.idle,
+      flip: false,
+    };
+  }
+
+  getActiveSpriteFrame() {
+    const resolution = this.resolveSpriteFrames(this.animation.state);
+    const frames = resolution.frames;
+    if (!frames || frames.length === 0) {
+      return {
+        frame: null,
+        flip: resolution.flip,
+      };
+    }
+
+    const safeIndex = clamp(this.animation.frameIndex, 0, frames.length - 1);
+    return {
+      frame: frames[safeIndex],
+      flip: resolution.flip,
+    };
+  }
+
+  completeCurrentLevel(now) {
     const level = this.getCurrentLevel();
     const elapsedMs = now - this.levelStartedAt;
     this.levelFinishedAt = now;
@@ -282,15 +450,43 @@ export class GravityWeaverScene {
     this.statusPill.textContent = "Campana completada. Presiona Enter para reiniciar";
   }
 
-  render(p5) {
+  render(p5, now) {
     this.drawGhostLayer(p5);
-    this.drawNebula(p5);
-    this.drawStars(p5);
 
-    const pulse = (Math.sin(performance.now() / 1000 * this.config.level.glowPulseSpeed) + 1) * 0.5;
-    this.levelManager.draw(p5, this.config.visuals, pulse);
-    this.astronaut.draw(p5, this.config.astronaut);
+    const shake = this.getScreenShakeOffset(now);
+    p5.push();
+    p5.translate(shake.x, shake.y);
+
+    this.drawBackgroundCover(p5, this.assets.images.backgroundMain ?? null);
+    this.drawNebula(p5);
+    this.drawStars(p5, now / 1000);
+
+    const pulse = (Math.sin(now / 1000 * this.config.level.glowPulseSpeed) + 1) * 0.5;
+    this.levelManager.draw(p5, this.config.visuals, pulse, {
+      obstaclesSheet: this.assets.images.obstaclesSheet ?? null,
+      wallType: this.config.assets.obstacleSolidCrop,
+      tileSize: this.config.assets.obstacleTileSize,
+    });
+
+    const spriteData = this.getActiveSpriteFrame();
+    const boostStretch = this.animation.boostWeight;
+    this.astronaut.draw(p5, {
+      astronautConfig: {
+        ...this.config.astronaut,
+        spriteScale: this.config.assets.astronautScale,
+      },
+      spriteSheet: this.assets.images.astronautSheet ?? null,
+      spriteFrame: spriteData.frame,
+      flipX: spriteData.flip,
+      rotation: this.animation.tilt,
+      scaleX: 1 + boostStretch * 0.09,
+      scaleY: 1 - boostStretch * 0.05,
+      boostWeight: this.animation.boostWeight,
+      impactFlashAlpha: this.animation.impactFlashAlpha,
+    });
+
     this.drawLevelOverlay(p5);
+    p5.pop();
 
     if (this.state === "won-level") {
       this.drawEndCard(p5, "Nivel completado", "Enter: siguiente nivel | R: reintentar");
@@ -299,6 +495,45 @@ export class GravityWeaverScene {
     if (this.state === "campaign-complete") {
       this.drawEndCard(p5, "Gravity Weaver completado", "Enter: reiniciar campana | Esc: launcher");
     }
+  }
+
+  drawBackgroundCover(p5, image) {
+    const source = getDrawableSource(image);
+    if (!source) {
+      return;
+    }
+
+    const canvasRatio = p5.width / p5.height;
+    const imageRatio = image.width / image.height;
+    let sx = 0;
+    let sy = 0;
+    let sw = image.width;
+    let sh = image.height;
+
+    if (imageRatio > canvasRatio) {
+      sw = image.height * canvasRatio;
+      sx = (image.width - sw) / 2;
+    } else {
+      sh = image.width / canvasRatio;
+      sy = (image.height - sh) / 2;
+    }
+
+    p5.push();
+    p5.drawingContext.save();
+    p5.drawingContext.globalAlpha = this.config.assets.backgroundAlpha;
+    p5.drawingContext.drawImage(
+      source,
+      sx,
+      sy,
+      sw,
+      sh,
+      0,
+      0,
+      p5.width,
+      p5.height,
+    );
+    p5.drawingContext.restore();
+    p5.pop();
   }
 
   drawGhostLayer(p5) {
@@ -322,8 +557,7 @@ export class GravityWeaverScene {
     p5.pop();
   }
 
-  drawStars(p5) {
-    const time = performance.now() / 1000;
+  drawStars(p5, time) {
     this.drawStarLayer(p5, this.starLayers.far, 0.22, time);
     this.drawStarLayer(p5, this.starLayers.mid, 0.36, time);
     this.drawStarLayer(p5, this.starLayers.near, 0.5, time);
@@ -371,6 +605,19 @@ export class GravityWeaverScene {
     p5.fill(this.config.visuals.textSoftColor);
     p5.text(subtitle, p5.width / 2, p5.height / 2 + 30);
     p5.pop();
+  }
+
+  getScreenShakeOffset(now) {
+    if (now >= this.animation.screenShakeUntil || this.animation.screenShakeStrength <= 0) {
+      return { x: 0, y: 0 };
+    }
+
+    const ratio = (this.animation.screenShakeUntil - now) / Math.max(this.config.assets.impactMs, 1);
+    const amplitude = this.animation.screenShakeStrength * ratio;
+    return {
+      x: (Math.random() * 2 - 1) * amplitude,
+      y: (Math.random() * 2 - 1) * amplitude,
+    };
   }
 
   handleAction(action) {
@@ -680,6 +927,8 @@ export class GravityWeaverScene {
     this.root.querySelector('[data-role="level-name"]').textContent = `${this.levelIndex + 1}. ${level.title}`;
     this.root.querySelector('[data-role="input-source"]').textContent = this.inputSource;
     this.root.querySelector('[data-role="ml-label"]').textContent = this.currentLabel;
+    this.root.querySelector('[data-role="anim-state"]').textContent = this.animation.state;
+    this.root.querySelector('[data-role="boost-weight"]').textContent = this.animation.boostWeight.toFixed(2);
     this.root.querySelector('[data-role="gravity-target"]').textContent = `${this.targetGravity.x.toFixed(2)}, ${this.targetGravity.y.toFixed(2)}`;
     this.root.querySelector('[data-role="gravity-current"]').textContent = `${this.currentGravity.x.toFixed(2)}, ${this.currentGravity.y.toFixed(2)}`;
     this.root.querySelector('[data-role="level-time"]').textContent = formatMs(elapsedMs);

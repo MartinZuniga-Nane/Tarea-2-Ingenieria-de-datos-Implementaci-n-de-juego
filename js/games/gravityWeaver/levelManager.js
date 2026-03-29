@@ -2,6 +2,14 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+function getDrawableSource(image) {
+  if (!image) {
+    return null;
+  }
+
+  return image.canvas || image.elt || image;
+}
+
 export class LevelManager {
   constructor(config) {
     this.config = config;
@@ -15,6 +23,8 @@ export class LevelManager {
     this.obstacles = [];
     this.portal = { x: 0, y: 0, width: 80, height: 80 };
     this.collisionCount = 0;
+    this.cachedPattern = null;
+    this.cachedPatternKey = "";
   }
 
   loadLevel(levelDefinition) {
@@ -120,13 +130,28 @@ export class LevelManager {
     );
   }
 
-  draw(p5, visuals, pulse = 0) {
+  draw(p5, visuals, pulse = 0, options = {}) {
+    const {
+      obstaclesSheet = null,
+      wallType = null,
+      tileSize = 64,
+    } = options;
+
+    const source = getDrawableSource(obstaclesSheet);
+
+    if (source && wallType) {
+      this.drawObstacleTiles(p5, source, wallType, tileSize);
+    } else {
+      p5.push();
+      p5.noStroke();
+      p5.fill(visuals.obstacleColor);
+      this.obstacles.forEach((obstacle) => {
+        p5.rect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, 12);
+      });
+      p5.pop();
+    }
+
     p5.push();
-    p5.noStroke();
-    p5.fill(visuals.obstacleColor);
-    this.obstacles.forEach((obstacle) => {
-      p5.rect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, 12);
-    });
     p5.stroke(visuals.obstacleStroke);
     p5.strokeWeight(1.4);
     p5.noFill();
@@ -156,5 +181,85 @@ export class LevelManager {
 
     ctx.shadowBlur = 0;
     ctx.shadowColor = "transparent";
+  }
+
+  drawObstacleTiles(p5, source, wallType, tileSize) {
+    const sourceX = wallType.x;
+    const sourceY = wallType.y;
+    const sourceWidth = wallType.width;
+    const sourceHeight = wallType.height;
+
+    if (sourceWidth <= 0 || sourceHeight <= 0 || tileSize <= 0) {
+      return;
+    }
+
+    const pattern = this.getOrCreatePattern(p5, source, wallType, tileSize);
+    if (!pattern) {
+      return;
+    }
+
+    const ctx = p5.drawingContext;
+    p5.push();
+    ctx.save();
+    ctx.globalAlpha = 0.92;
+    ctx.imageSmoothingEnabled = false;
+
+    this.obstacles.forEach((obstacle) => {
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(obstacle.x, obstacle.y, obstacle.width, obstacle.height);
+      ctx.clip();
+      ctx.translate(obstacle.x, obstacle.y);
+      ctx.fillStyle = pattern;
+      ctx.fillRect(0, 0, obstacle.width, obstacle.height);
+      ctx.restore();
+    });
+
+    ctx.restore();
+    p5.pop();
+  }
+
+  getOrCreatePattern(p5, source, wallType, tileSize) {
+    const key = `${source.width}x${source.height}:${wallType.x},${wallType.y},${wallType.width},${wallType.height}:${tileSize}`;
+    if (this.cachedPattern && this.cachedPatternKey === key) {
+      return this.cachedPattern;
+    }
+
+    const tileCanvas = document.createElement("canvas");
+    tileCanvas.width = tileSize;
+    tileCanvas.height = tileSize;
+    const tileCtx = tileCanvas.getContext("2d");
+    if (!tileCtx) {
+      return null;
+    }
+
+    tileCtx.imageSmoothingEnabled = false;
+    tileCtx.clearRect(0, 0, tileSize, tileSize);
+    tileCtx.drawImage(
+      source,
+      wallType.x,
+      wallType.y,
+      wallType.width,
+      wallType.height,
+      0,
+      0,
+      tileSize,
+      tileSize,
+    );
+
+    const imageData = tileCtx.getImageData(0, 0, tileSize, tileSize);
+    for (let index = 3; index < imageData.data.length; index += 4) {
+      imageData.data[index] = 255;
+    }
+    tileCtx.putImageData(imageData, 0, 0);
+
+    const pattern = p5.drawingContext.createPattern(tileCanvas, "repeat");
+    if (!pattern) {
+      return null;
+    }
+
+    this.cachedPattern = pattern;
+    this.cachedPatternKey = key;
+    return pattern;
   }
 }
