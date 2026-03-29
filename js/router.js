@@ -22,6 +22,13 @@ export class Router {
           router: this,
           payload,
         });
+      } else if (route === "gravity-weaver") {
+        const { GravityWeaverScene } = await import("./games/gravityWeaver/gravityWeaverScene.js");
+        this.currentView = new GravityWeaverScene({
+          root: this.root,
+          router: this,
+          payload,
+        });
       } else {
         this.currentView = new LauncherApp({
           root: this.root,

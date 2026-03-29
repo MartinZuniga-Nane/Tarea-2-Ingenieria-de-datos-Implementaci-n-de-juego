@@ -24,6 +24,7 @@ export class LauncherApp {
           <ul>
             <li>Libreria</li>
             <li>Duel</li>
+            <li>Gravity Weaver</li>
           </ul>
         </section>
       </aside>
@@ -41,6 +42,15 @@ export class LauncherApp {
           meta: "p5.js + ml5.js + ES Modules",
           cover: "./assets/launcher/duel-cover.png",
           details: "Seleccion de personajes, fondos, combate por ventana de disparo y resultado con revancha.",
+        },
+        {
+          id: "gravity-weaver",
+          title: "Gravity Weaver",
+          tag: "Nuevo puzzle",
+          description: "Puzzle fisico neon donde manipulas la gravedad por poses de mano o con flechas como respaldo.",
+          meta: "p5.js + ml5.js Teachable Machine",
+          cover: "./assets/launcher/duel-cover.png",
+          details: "Controla la gravedad en tiempo real para esquivar obstaculos y llegar al portal con inercia y rebotes.",
         },
       ],
       onPlay: (game) => this.router.navigate(game.id),
