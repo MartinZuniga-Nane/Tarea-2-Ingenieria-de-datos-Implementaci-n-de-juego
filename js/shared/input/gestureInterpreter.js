@@ -79,23 +79,24 @@ function getExtendedFingers(landmarks) {
 }
 
 function estimateDirection(landmarks) {
+  const mcp = point(landmarks, 5);
   const pip = point(landmarks, 6);
   const tip = point(landmarks, 8);
-  if (!pip || !tip) {
+  if (!mcp || !pip || !tip) {
     return { direction: null, intensity: 0 };
   }
 
-  const dx = tip.x - pip.x;
-  const dy = Math.abs(tip.y - pip.y);
-  const horizontalIntent = Math.abs(dx) - dy;
+  const dx = tip.x - mcp.x;
+  const dy = Math.abs(tip.y - mcp.y);
+  const horizontalIntent = Math.abs(dx) - dy * 0.45;
 
-  if (horizontalIntent < 10) {
+  if (horizontalIntent < 6) {
     return { direction: null, intensity: 0 };
   }
 
   return {
-    direction: dx < 0 ? "LEFT_INDEX" : "RIGHT_INDEX",
-    intensity: Math.min(1, Math.abs(dx) / 70),
+    direction: dx > 0 ? "LEFT_INDEX" : "RIGHT_INDEX",
+    intensity: Math.min(1, Math.abs(dx) / 52),
   };
 }
 
@@ -119,7 +120,7 @@ export class GestureInterpreter {
     } else if (!fingers.thumb && fingers.index && fingers.middle && fingers.ring && fingers.pinky) {
       label = "FOUR_FINGERS";
       confidence = 0.9;
-    } else if (fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky) {
+    } else if (fingers.index && direction.direction && openCount <= 2) {
       label = direction.direction ?? "NONE";
       confidence = direction.intensity || 0.68;
     } else if (fingers.index && fingers.middle && !fingers.ring && !fingers.pinky) {
