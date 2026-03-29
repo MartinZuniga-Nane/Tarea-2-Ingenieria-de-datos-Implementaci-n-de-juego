@@ -21,6 +21,7 @@ export class LevelManager {
     };
     this.level = null;
     this.obstacles = [];
+    this.orbs = [];
     this.portal = { x: 0, y: 0, width: 80, height: 80 };
     this.collisionCount = 0;
     this.cachedPattern = null;
@@ -30,6 +31,13 @@ export class LevelManager {
   loadLevel(levelDefinition) {
     this.level = levelDefinition;
     this.obstacles = levelDefinition.obstacles.map((obstacle) => ({ ...obstacle }));
+    this.orbs = (levelDefinition.orbs ?? []).map((orb, index) => ({
+      id: `${levelDefinition.id}-orb-${index}`,
+      x: orb.x,
+      y: orb.y,
+      radius: orb.radius,
+      collected: false,
+    }));
     this.portal = { ...levelDefinition.portal };
     this.collisionCount = 0;
   }
@@ -130,11 +138,33 @@ export class LevelManager {
     );
   }
 
+  collectOrbs(astronaut) {
+    let collectedThisFrame = 0;
+    const thresholdPadding = astronaut.radius;
+
+    this.orbs.forEach((orb) => {
+      if (orb.collected) {
+        return;
+      }
+
+      const distance = Math.hypot(astronaut.position.x - orb.x, astronaut.position.y - orb.y);
+      if (distance <= orb.radius + thresholdPadding) {
+        orb.collected = true;
+        collectedThisFrame += 1;
+      }
+    });
+
+    return collectedThisFrame;
+  }
+
   draw(p5, visuals, pulse = 0, options = {}) {
     const {
       obstaclesSheet = null,
       wallType = null,
       tileSize = 64,
+      now = performance.now(),
+      orbConfig = null,
+      portalImage = null,
     } = options;
 
     const source = getDrawableSource(obstaclesSheet);
@@ -151,16 +181,10 @@ export class LevelManager {
       p5.pop();
     }
 
-    p5.push();
-    p5.stroke(visuals.obstacleStroke);
-    p5.strokeWeight(1.4);
-    p5.noFill();
-    this.obstacles.forEach((obstacle) => {
-      p5.rect(obstacle.x, obstacle.y, obstacle.width, obstacle.height, 12);
-    });
-    p5.pop();
+    this.drawOrbs(p5, now, orbConfig);
 
     const ctx = p5.drawingContext;
+    const portalSource = getDrawableSource(portalImage);
     const portalScale = 1 + pulse * 0.06;
     const portalWidth = this.portal.width * portalScale;
     const portalHeight = this.portal.height * portalScale;
@@ -171,12 +195,47 @@ export class LevelManager {
     ctx.shadowBlur = 22 + pulse * 16;
     ctx.shadowColor = visuals.portalGlowColor;
     p5.noStroke();
-    p5.fill(visuals.portalColor);
-    p5.rect(portalX, portalY, portalWidth, portalHeight, 16);
-    p5.stroke(visuals.portalGlowColor);
-    p5.strokeWeight(2);
-    p5.noFill();
-    p5.rect(portalX + 10, portalY + 10, portalWidth - 20, portalHeight - 20, 10);
+    if (portalSource) {
+      p5.drawingContext.drawImage(
+        portalSource,
+        portalX,
+        portalY,
+        portalWidth,
+        portalHeight,
+      );
+    } else {
+      p5.fill(visuals.portalColor);
+      p5.rect(portalX, portalY, portalWidth, portalHeight, 16);
+    }
+    p5.pop();
+
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = "transparent";
+  }
+
+  drawOrbs(p5, now, orbConfig) {
+    if (!orbConfig) {
+      return;
+    }
+
+    const pulse = (Math.sin((now / 1000) * orbConfig.pulseSpeed) + 1) * 0.5;
+    const ctx = p5.drawingContext;
+
+    p5.push();
+    this.orbs.forEach((orb) => {
+      if (orb.collected) {
+        return;
+      }
+
+      ctx.shadowBlur = 16 + pulse * 14;
+      ctx.shadowColor = orbConfig.glowColor;
+      p5.noStroke();
+      p5.fill(orbConfig.fillColor);
+      p5.circle(orb.x, orb.y, (orb.radius * 2) + pulse * 6);
+
+      p5.fill("rgba(255, 245, 210, 0.92)");
+      p5.circle(orb.x - 3, orb.y - 3, orb.radius * 0.75);
+    });
     p5.pop();
 
     ctx.shadowBlur = 0;

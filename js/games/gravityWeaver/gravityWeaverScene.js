@@ -3,6 +3,7 @@ import { Astronaut } from "./astronaut.js";
 import { gravityWeaverConfig } from "./config.js";
 import { loadGravityWeaverAssets } from "./gravityWeaverAssets.js";
 import { LevelManager } from "./levelManager.js";
+import { loadLeaderboard, pushLeaderboardEntry } from "./scoreboard.js";
 import { gravityWeaverLevels } from "./levels.js";
 
 function clamp(value, min, max) {
@@ -32,6 +33,12 @@ function getDrawableSource(image) {
   }
 
   return image.canvas || image.elt || image;
+}
+
+function sanitizeAlias(input) {
+  return String(input ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
 }
 
 export class GravityWeaverScene {
@@ -73,6 +80,26 @@ export class GravityWeaverScene {
     this.state = "idle";
     this.stateMessage = "Inicializando Gravity Weaver...";
     this.mlState = "idle";
+    this.playerAlias = "";
+    this.aliasConfirmed = false;
+    this.leaderboard = [];
+
+    this.score = {
+      campaignTotal: 0,
+      levelCurrent: 0,
+      levelLive: 0,
+      campaignProjected: 0,
+      levelOrbs: 0,
+      campaignOrbs: 0,
+      campaignCollisions: 0,
+      campaignSaved: false,
+      levelBreakdowns: [],
+      liveBreakdown: {
+        timePenalty: 0,
+        collisionPenalty: 0,
+        orbBonus: 0,
+      },
+    };
 
     this.animation = {
       state: "idle",
@@ -105,6 +132,8 @@ export class GravityWeaverScene {
 
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleKeyUp = this.handleKeyUp.bind(this);
+    this.handleAliasSubmit = this.handleAliasSubmit.bind(this);
+    this.handleAliasKeyDown = this.handleAliasKeyDown.bind(this);
 
     this.video = null;
     this.classifier = null;
@@ -131,6 +160,11 @@ export class GravityWeaverScene {
               <dt>Etiqueta ML</dt><dd data-role="ml-label">-</dd>
               <dt>Animacion</dt><dd data-role="anim-state">-</dd>
               <dt>Boost</dt><dd data-role="boost-weight">0.00</dd>
+              <dt>Alias</dt><dd data-role="player-alias">-</dd>
+              <dt>Score nivel</dt><dd data-role="level-score">0</dd>
+              <dt>Score campana</dt><dd data-role="campaign-score">0</dd>
+              <dt>Orbes nivel</dt><dd data-role="level-orbs">0</dd>
+              <dt>Orbes campana</dt><dd data-role="campaign-orbs">0</dd>
               <dt>Gravedad objetivo</dt><dd data-role="gravity-target">0.00, 0.00</dd>
               <dt>Gravedad actual</dt><dd data-role="gravity-current">0.00, 0.00</dd>
               <dt>Tiempo</dt><dd data-role="level-time">00:00</dd>
@@ -141,6 +175,15 @@ export class GravityWeaverScene {
             </dl>
           </aside>
           <aside class="game-shell__camera hidden" data-role="camera-panel"></aside>
+          <section data-role="alias-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+            <form data-role="alias-form" style="width:min(520px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:12px;pointer-events:auto;">
+              <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Ingresa tu alias</h3>
+              <p style="margin:0;color:#aebad9;">Se usara para registrar tu score al finalizar la campana.</p>
+              <input data-role="alias-input" type="text" maxlength="16" placeholder="Ejemplo: AstroRunner" style="padding:10px 12px;border-radius:10px;border:1px solid rgba(140,173,255,0.45);background:rgba(10,16,34,0.9);color:#ebf2ff;" required />
+              <button type="submit" style="padding:10px 14px;border:none;border-radius:10px;background:#5f92ff;color:#f2f7ff;font-weight:600;cursor:pointer;">Comenzar Campana</button>
+              <small data-role="alias-error" style="min-height:18px;color:#ffb8a7;"></small>
+            </form>
+          </section>
         </div>
       </main>
     `;
@@ -148,8 +191,19 @@ export class GravityWeaverScene {
     this.shell = this.root.querySelector(".game-shell");
     this.canvasContainer = this.root.querySelector(".game-shell__canvas");
     this.statusPill = this.root.querySelector('[data-role="status"]');
+    this.topbar = this.root.querySelector(".game-shell__topbar");
+    this.debugPanel = this.root.querySelector('[data-role="debug-panel"]');
     this.cameraPanel = this.root.querySelector('[data-role="camera-panel"]');
+    this.aliasOverlay = this.root.querySelector('[data-role="alias-overlay"]');
+    this.aliasForm = this.root.querySelector('[data-role="alias-form"]');
+    this.aliasInput = this.root.querySelector('[data-role="alias-input"]');
+    this.aliasError = this.root.querySelector('[data-role="alias-error"]');
     this.modal = new Modal(this.shell);
+    this.topbar?.classList.add("hidden");
+    this.debugPanel?.classList.add("hidden");
+    this.cameraPanel?.classList.add("hidden");
+    this.aliasForm?.addEventListener("submit", this.handleAliasSubmit);
+    this.aliasInput?.addEventListener("keydown", this.handleAliasKeyDown);
 
     this.start().catch((error) => {
       this.state = "error";
@@ -179,12 +233,16 @@ export class GravityWeaverScene {
       console.warn("Gravity Weaver assets faltantes:", this.assets.missing);
     }
 
+    this.leaderboard = loadLeaderboard(this.config.score.storageKey);
+
     this.setupKeyboardListeners();
     this.generateStars();
-    this.enter();
+    this.state = "awaiting-alias";
+    this.statusPill.textContent = "Ingresa tu alias para comenzar";
 
     this.sketch = new window.p5(this.createSketch());
     this.initializeMachineLearning();
+    this.aliasInput?.focus();
   }
 
   createSketch() {
@@ -235,6 +293,54 @@ export class GravityWeaverScene {
     this.loadLevel(this.levelIndex);
   }
 
+  handleAliasSubmit(event) {
+    event.preventDefault();
+    const alias = sanitizeAlias(this.aliasInput?.value ?? "");
+    const isValid = /^[A-Za-z0-9_-]{3,16}$/.test(alias);
+
+    if (!isValid) {
+      if (this.aliasError) {
+        this.aliasError.textContent = "Alias invalido. Usa 3-16 caracteres: letras, numeros, guion o underscore.";
+      }
+      return;
+    }
+
+    this.playerAlias = alias;
+    this.aliasConfirmed = true;
+    if (this.aliasError) {
+      this.aliasError.textContent = "";
+    }
+    this.aliasOverlay?.classList.add("hidden");
+    this.resetCampaignProgress();
+    this.enter();
+  }
+
+  handleAliasKeyDown(event) {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+    this.aliasForm?.requestSubmit();
+  }
+
+  resetCampaignProgress() {
+    this.levelIndex = 0;
+    this.metrics.attempts = 1;
+    this.score.campaignTotal = 0;
+    this.score.levelCurrent = 0;
+    this.score.levelLive = 0;
+    this.score.campaignProjected = 0;
+    this.score.levelOrbs = 0;
+    this.score.campaignOrbs = 0;
+    this.score.campaignCollisions = 0;
+    this.score.campaignSaved = false;
+    this.score.levelBreakdowns = [];
+    this.score.liveBreakdown.timePenalty = 0;
+    this.score.liveBreakdown.collisionPenalty = 0;
+    this.score.liveBreakdown.orbBonus = 0;
+  }
+
   loadLevel(index) {
     const safeIndex = clamp(index, 0, this.levels.length - 1);
     this.levelIndex = safeIndex;
@@ -245,6 +351,13 @@ export class GravityWeaverScene {
     this.levelStartedAt = performance.now();
     this.levelFinishedAt = 0;
     this.metrics.collisions = 0;
+    this.score.levelOrbs = 0;
+    this.score.levelCurrent = 0;
+    this.score.levelLive = this.config.score.baseLevelScore;
+    this.score.campaignProjected = this.score.campaignTotal + this.score.levelLive;
+    this.score.liveBreakdown.timePenalty = 0;
+    this.score.liveBreakdown.collisionPenalty = 0;
+    this.score.liveBreakdown.orbBonus = 0;
 
     this.currentGravity.x = 0;
     this.currentGravity.y = 0;
@@ -270,6 +383,11 @@ export class GravityWeaverScene {
 
   update(dtSeconds, now) {
     if (this.state === "error") {
+      return;
+    }
+
+    if (this.state === "awaiting-alias") {
+      this.updateDebugPanel();
       return;
     }
 
@@ -306,6 +424,14 @@ export class GravityWeaverScene {
     this.astronaut.update(dtSeconds, this.config);
     const collisionsInFrame = this.levelManager.resolveCollisions(this.astronaut);
     this.metrics.collisions += collisionsInFrame;
+
+    const collectedOrbs = this.levelManager.collectOrbs(this.astronaut);
+    if (collectedOrbs > 0) {
+      this.score.levelOrbs += collectedOrbs;
+      this.score.campaignOrbs += collectedOrbs;
+    }
+
+    this.computeLiveLevelScore(now);
 
     if (collisionsInFrame > 0) {
       this.animation.impactUntil = now + this.config.assets.impactMs;
@@ -427,9 +553,61 @@ export class GravityWeaverScene {
     };
   }
 
+  computeLiveLevelScore(now) {
+    const elapsedMs = Math.max(0, now - this.levelStartedAt);
+    const elapsedSeconds = Math.floor(elapsedMs / 1000);
+    const timePenalty = elapsedSeconds * this.config.score.timePenaltyPerSecond;
+    const collisionPenalty = this.metrics.collisions * this.config.score.collisionPenaltyEach;
+    const orbBonus = this.score.levelOrbs * this.config.score.orbBonusEach;
+    const levelLive = Math.max(
+      0,
+      this.config.score.baseLevelScore - timePenalty - collisionPenalty + orbBonus,
+    );
+
+    this.score.liveBreakdown.timePenalty = timePenalty;
+    this.score.liveBreakdown.collisionPenalty = collisionPenalty;
+    this.score.liveBreakdown.orbBonus = orbBonus;
+    this.score.levelLive = levelLive;
+    this.score.campaignProjected = this.score.campaignTotal + levelLive;
+
+    return {
+      elapsedMs,
+      levelLive,
+      timePenalty,
+      collisionPenalty,
+      orbBonus,
+    };
+  }
+
   completeCurrentLevel(now) {
     const level = this.getCurrentLevel();
-    const elapsedMs = now - this.levelStartedAt;
+    const live = this.computeLiveLevelScore(now);
+    const elapsedMs = live.elapsedMs;
+    const levelScore = live.levelLive;
+    const timePenalty = live.timePenalty;
+    const collisionPenalty = live.collisionPenalty;
+    const orbBonus = live.orbBonus;
+
+    this.score.levelCurrent = levelScore;
+    this.score.campaignTotal += levelScore;
+    this.score.campaignProjected = this.score.campaignTotal;
+    this.score.campaignCollisions += this.metrics.collisions;
+    this.score.levelBreakdowns.push({
+      levelId: level.id,
+      title: level.title,
+      elapsedMs,
+      collisions: this.metrics.collisions,
+      orbs: this.score.levelOrbs,
+      levelScore,
+      penalties: {
+        timePenalty,
+        collisionPenalty,
+      },
+      bonuses: {
+        orbBonus,
+      },
+    });
+
     this.levelFinishedAt = now;
 
     const previousBest = this.metrics.bestByLevel.get(level.id);
@@ -442,12 +620,28 @@ export class GravityWeaverScene {
 
     if (this.levelIndex < this.levels.length - 1) {
       this.state = "won-level";
-      this.statusPill.textContent = `Nivel superado: ${level.title}. Presiona Enter para continuar`;
+      this.statusPill.textContent = `Nivel superado: ${level.title} (+${levelScore} pts). Presiona Enter para continuar`;
       return;
     }
 
     this.state = "campaign-complete";
-    this.statusPill.textContent = "Campana completada. Presiona Enter para reiniciar";
+    this.statusPill.textContent = `Campana completada con ${this.score.campaignTotal} pts. Presiona Enter para reiniciar`;
+
+    if (!this.score.campaignSaved) {
+      this.leaderboard = pushLeaderboardEntry(
+        this.config.score.storageKey,
+        {
+          alias: this.playerAlias,
+          totalScore: this.score.campaignTotal,
+          completedAt: Date.now(),
+          totalCollisions: this.score.campaignCollisions,
+          totalOrbs: this.score.campaignOrbs,
+          levels: this.score.levelBreakdowns.length,
+        },
+        this.config.score.leaderboardSize,
+      );
+      this.score.campaignSaved = true;
+    }
   }
 
   render(p5, now) {
@@ -466,6 +660,9 @@ export class GravityWeaverScene {
       obstaclesSheet: this.assets.images.obstaclesSheet ?? null,
       wallType: this.config.assets.obstacleSolidCrop,
       tileSize: this.config.assets.obstacleTileSize,
+      now,
+      orbConfig: this.config.orbs,
+      portalImage: this.assets.images.portalImage ?? null,
     });
 
     const spriteData = this.getActiveSpriteFrame();
@@ -489,12 +686,53 @@ export class GravityWeaverScene {
     p5.pop();
 
     if (this.state === "won-level") {
-      this.drawEndCard(p5, "Nivel completado", "Enter: siguiente nivel | R: reintentar");
+      this.drawEndCard(
+        p5,
+        "Nivel completado",
+        `+${this.score.levelCurrent} pts | Enter: siguiente nivel | R: reintentar`,
+      );
     }
 
     if (this.state === "campaign-complete") {
-      this.drawEndCard(p5, "Gravity Weaver completado", "Enter: reiniciar campana | Esc: launcher");
+      this.drawEndCard(
+        p5,
+        `Score final: ${this.score.campaignTotal}`,
+        "Enter: reiniciar campana | Esc: launcher",
+      );
+      this.drawLeaderboard(p5);
     }
+  }
+
+  drawLeaderboard(p5) {
+    const leaderboardTop = this.leaderboard.slice(0, this.config.score.leaderboardSize);
+    const panelX = p5.width / 2 - 260;
+    const panelY = p5.height / 2 + 72;
+    const panelWidth = 520;
+    const rowHeight = 28;
+    const panelHeight = 56 + (leaderboardTop.length * rowHeight);
+
+    p5.push();
+    p5.noStroke();
+    p5.fill("rgba(7, 11, 26, 0.84)");
+    p5.rect(panelX, panelY, panelWidth, panelHeight, 12);
+    p5.fill(this.config.visuals.textColor);
+    p5.textAlign(p5.LEFT, p5.TOP);
+    p5.textFont("Space Grotesk");
+    p5.textSize(20);
+    p5.text("Scoreboard", panelX + 16, panelY + 12);
+
+    p5.textFont("IBM Plex Sans");
+    p5.textSize(14);
+    leaderboardTop.forEach((entry, index) => {
+      const isCurrent = entry.alias === this.playerAlias && entry.totalScore === this.score.campaignTotal;
+      p5.fill(isCurrent ? "#ffe7b1" : this.config.visuals.textSoftColor);
+      p5.text(
+        `${index + 1}. ${entry.alias} - ${entry.totalScore} pts`,
+        panelX + 16,
+        panelY + 40 + (index * rowHeight),
+      );
+    });
+    p5.pop();
   }
 
   drawBackgroundCover(p5, image) {
@@ -580,13 +818,13 @@ export class GravityWeaverScene {
     p5.textAlign(p5.LEFT, p5.TOP);
     p5.fill(this.config.visuals.textColor);
     p5.textFont("Space Grotesk");
-    p5.textSize(22);
-    p5.text(level.title, 24, 24);
+    p5.textSize(24);
+    p5.text(`Nivel ${this.levelIndex + 1} - ${level.title}`, 24, 24);
     p5.fill(this.config.visuals.textSoftColor);
     p5.textFont("IBM Plex Sans");
-    p5.textSize(16);
-    p5.text(level.hint, 24, 56);
-    p5.text(this.config.level.objectiveText, 24, 78);
+    p5.textSize(20);
+    p5.text(`Puntos: ${this.score.levelLive}`, 24, 62);
+    p5.text(`Total: ${this.score.campaignTotal}`, 24, 90);
     p5.pop();
   }
 
@@ -639,7 +877,7 @@ export class GravityWeaverScene {
     }
 
     if (action === "NEXT_LEVEL" && this.state === "campaign-complete") {
-      this.metrics.attempts = 1;
+      this.resetCampaignProgress();
       this.loadLevel(0);
       this.state = "running";
     }
@@ -653,7 +891,6 @@ export class GravityWeaverScene {
     try {
       this.mlState = "requesting-camera";
       this.video = await this.createVideoElement();
-      this.cameraPanel.classList.remove("hidden");
       this.cameraPanel.appendChild(this.video);
 
       this.mlState = "loading-model";
@@ -865,6 +1102,10 @@ export class GravityWeaverScene {
       return;
     }
 
+    if (!this.aliasConfirmed || this.state === "awaiting-alias") {
+      return;
+    }
+
     if (event.code === "KeyR") {
       event.preventDefault();
       this.handleAction("RESET_LEVEL");
@@ -886,6 +1127,10 @@ export class GravityWeaverScene {
   }
 
   handleKeyUp(event) {
+    if (!this.aliasConfirmed || this.state === "awaiting-alias") {
+      return;
+    }
+
     if (!(event.code in this.keyState)) {
       return;
     }
@@ -915,6 +1160,11 @@ export class GravityWeaverScene {
   }
 
   updateStatusText() {
+    if (this.state === "awaiting-alias") {
+      this.statusPill.textContent = "Ingresa tu alias para comenzar";
+      return;
+    }
+
     const level = this.getCurrentLevel();
     this.statusPill.textContent = `Gravity Weaver - ${level.title} (${this.levelIndex + 1}/${this.levels.length})`;
   }
@@ -922,13 +1172,18 @@ export class GravityWeaverScene {
   updateDebugPanel() {
     const level = this.getCurrentLevel();
     const now = this.levelFinishedAt || performance.now();
-    const elapsedMs = now - this.levelStartedAt;
+    const elapsedMs = this.levelStartedAt > 0 ? now - this.levelStartedAt : 0;
 
     this.root.querySelector('[data-role="level-name"]').textContent = `${this.levelIndex + 1}. ${level.title}`;
     this.root.querySelector('[data-role="input-source"]').textContent = this.inputSource;
     this.root.querySelector('[data-role="ml-label"]').textContent = this.currentLabel;
     this.root.querySelector('[data-role="anim-state"]').textContent = this.animation.state;
     this.root.querySelector('[data-role="boost-weight"]').textContent = this.animation.boostWeight.toFixed(2);
+    this.root.querySelector('[data-role="player-alias"]').textContent = this.playerAlias || "-";
+    this.root.querySelector('[data-role="level-score"]').textContent = String(this.score.levelLive);
+    this.root.querySelector('[data-role="campaign-score"]').textContent = String(this.score.campaignProjected);
+    this.root.querySelector('[data-role="level-orbs"]').textContent = String(this.score.levelOrbs);
+    this.root.querySelector('[data-role="campaign-orbs"]').textContent = String(this.score.campaignOrbs);
     this.root.querySelector('[data-role="gravity-target"]').textContent = `${this.targetGravity.x.toFixed(2)}, ${this.targetGravity.y.toFixed(2)}`;
     this.root.querySelector('[data-role="gravity-current"]').textContent = `${this.currentGravity.x.toFixed(2)}, ${this.currentGravity.y.toFixed(2)}`;
     this.root.querySelector('[data-role="level-time"]').textContent = formatMs(elapsedMs);
@@ -953,6 +1208,8 @@ export class GravityWeaverScene {
     this.destroyed = true;
     this.exit();
     this.teardownKeyboardListeners();
+    this.aliasForm?.removeEventListener("submit", this.handleAliasSubmit);
+    this.aliasInput?.removeEventListener("keydown", this.handleAliasKeyDown);
     this.modal?.hide();
     this.sketch?.remove();
     this.video?.remove();

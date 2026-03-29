@@ -7,6 +7,10 @@ export const gravityWeaverLevels = [
     parTimeMs: 26000,
     spawn: { x: 120, y: 104 },
     portal: { x: 1110, y: 560, width: 100, height: 100 },
+    orbs: [
+      { x: 190, y: 300, radius: 16 },
+      { x: 1010, y: 300, radius: 16 },
+    ],
     obstacles: [
       { x: 280, y: 90, width: 70, height: 360 },
       { x: 430, y: 450, width: 320, height: 70 },
@@ -22,6 +26,10 @@ export const gravityWeaverLevels = [
     parTimeMs: 32000,
     spawn: { x: 106, y: 610 },
     portal: { x: 1120, y: 74, width: 90, height: 90 },
+    orbs: [
+      { x: 250, y: 620, radius: 16 },
+      { x: 1060, y: 90, radius: 16 },
+    ],
     obstacles: [
       { x: 180, y: 520, width: 640, height: 54 },
       { x: 760, y: 220, width: 54, height: 300 },
@@ -39,6 +47,10 @@ export const gravityWeaverLevels = [
     parTimeMs: 30000,
     spawn: { x: 130, y: 350 },
     portal: { x: 1102, y: 560, width: 100, height: 100 },
+    orbs: [
+      { x: 380, y: 350, radius: 16 },
+      { x: 940, y: 520, radius: 16 },
+    ],
     obstacles: [
       { x: 220, y: 70, width: 74, height: 250 },
       { x: 220, y: 400, width: 74, height: 250 },
@@ -56,6 +68,10 @@ export const gravityWeaverLevels = [
     parTimeMs: 36000,
     spawn: { x: 98, y: 102 },
     portal: { x: 1120, y: 560, width: 90, height: 90 },
+    orbs: [
+      { x: 400, y: 180, radius: 16 },
+      { x: 960, y: 620, radius: 16 },
+    ],
     obstacles: [
       { x: 170, y: 154, width: 188, height: 66 },
       { x: 170, y: 314, width: 188, height: 66 },
@@ -77,6 +93,10 @@ export const gravityWeaverLevels = [
     parTimeMs: 45000,
     spawn: { x: 96, y: 620 },
     portal: { x: 1114, y: 70, width: 92, height: 92 },
+    orbs: [
+      { x: 760, y: 650, radius: 16 },
+      { x: 740, y: 260, radius: 16 },
+    ],
     obstacles: [
       { x: 160, y: 540, width: 860, height: 56 },
       { x: 160, y: 180, width: 56, height: 416 },

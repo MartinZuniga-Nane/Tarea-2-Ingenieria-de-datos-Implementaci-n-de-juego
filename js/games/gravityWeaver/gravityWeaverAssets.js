@@ -12,6 +12,7 @@ export async function loadGravityWeaverAssets(config) {
     backgroundMain: config.assets.backgroundPath,
     astronautSheet: config.assets.astronautSheetPath,
     obstaclesSheet: config.assets.obstaclesSheetPath,
+    portalImage: config.assets.portalPath,
   };
 
   return AssetLoader.loadImages(manifest);
