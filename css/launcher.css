@@ -52,10 +52,33 @@
 }
 
 .launcher__menu li {
+  padding: 0;
+}
+
+.launcher__menu-btn {
+  width: 100%;
   padding: 0.9rem 1rem;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--text);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.launcher__menu-btn:hover,
+.launcher__menu-btn:focus-visible {
+  outline: none;
+  transform: translateY(-1px);
+  border-color: rgba(132, 186, 255, 0.45);
+  background: rgba(132, 186, 255, 0.12);
+}
+
+.launcher__menu-btn.is-active {
+  border-color: rgba(132, 186, 255, 0.45);
+  background: rgba(132, 186, 255, 0.12);
 }
 
 .launcher__content {

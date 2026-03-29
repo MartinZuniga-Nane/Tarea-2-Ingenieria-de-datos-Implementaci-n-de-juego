@@ -3,6 +3,7 @@ import { GestureController } from "../../shared/input/gestureController.js";
 import { HandposeAdapter } from "../../shared/input/handposeAdapter.js";
 import { KeyboardFallback } from "../../shared/input/keyboardFallback.js";
 import { Modal } from "../../shared/ui/modal.js";
+import { createGameSidebar } from "../../shared/ui/gameSidebar.js";
 import { duelConfig } from "./config.js";
 import { DuelState } from "./duelState.js";
 import { loadDuelAssets } from "./duelAssets.js";
@@ -36,6 +37,7 @@ export class DuelGame {
     this.currentSceneKey = null;
     this.cameraOverlayCanvas = null;
     this.runtimeError = null;
+    this.gameSidebar = null;
   }
 
   mount() {
@@ -67,6 +69,11 @@ export class DuelGame {
     this.debugPanel = this.root.querySelector('[data-role="debug-panel"]');
     this.cameraPanel = this.root.querySelector('[data-role="camera-panel"]');
     this.modal = new Modal(this.shell);
+    this.gameSidebar = createGameSidebar({
+      onNavigate: (route) => this.router.navigate(route),
+      onBack: () => this.router.back(),
+    });
+    this.shell.appendChild(this.gameSidebar.element);
 
     this.start().catch((error) => {
       this.modal.show({
@@ -218,5 +225,6 @@ export class DuelGame {
     this.sketch?.remove();
     this.modal?.hide();
     this.cameraOverlayCanvas?.remove();
+    this.gameSidebar?.destroy();
   }
 }
