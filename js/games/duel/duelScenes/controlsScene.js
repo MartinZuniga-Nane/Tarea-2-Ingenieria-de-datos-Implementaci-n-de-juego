@@ -71,7 +71,7 @@ export class ControlsScene {
       p5.textFont("IBM Plex Sans");
       p5.textSize(15);
       p5.fill("#b5c0d3");
-      p5.text(item.detail, x + 24, y + 48, 400);
+      p5.text(item.detail, x + 24, y + 48, 400, 42);
       p5.pop();
     });
 
@@ -80,9 +80,11 @@ export class ControlsScene {
     p5.textFont("IBM Plex Sans");
     p5.textSize(17);
     p5.textAlign(p5.CENTER, p5.CENTER);
-    p5.text("Teclado local: F dispara Player 1, K dispara Player 2", p5.width / 2, p5.height - 162);
+    p5.text("Teclado local: F dispara Player 1, K dispara Player 2", p5.width / 2, p5.height - 168);
     p5.pop();
 
+    this.continueButton.bounds.x = p5.width / 2;
+    this.continueButton.bounds.y = p5.height - 92;
     this.continueButton.draw(p5, { active: true });
   }
 

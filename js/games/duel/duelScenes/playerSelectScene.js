@@ -4,16 +4,21 @@ import { drawImageCentered, drawImageRect } from "../renderUtils.js";
 export class PlayerSelectScene {
   constructor(game) {
     this.game = game;
-    this.selector = new SelectionSystem({ rows: [game.config.playerSelect.models.length] });
+    this.selector = new SelectionSystem({ rows: [2, 2] });
     this.currentSlot = "left";
   }
 
   enter() {
     this.currentSlot = "left";
-    this.selector = new SelectionSystem({ rows: [this.game.config.playerSelect.models.length] });
+    this.selector = new SelectionSystem({ rows: [2, 2] });
   }
 
   update() {}
+
+  getActiveModelIndex() {
+    const selection = this.selector.getSelection();
+    return selection.rowIndex * 2 + selection.columnIndexes[selection.rowIndex];
+  }
 
   render(p5) {
     p5.background("#08111d");
@@ -22,8 +27,7 @@ export class PlayerSelectScene {
       drawImageRect(p5, bg, 0, 0, p5.width, p5.height, { alpha: 0.24 });
     }
 
-    const selection = this.selector.getSelection();
-    const modelIndex = selection.columnIndexes[0];
+    const modelIndex = this.getActiveModelIndex();
     const model = this.game.config.playerSelect.models[modelIndex];
     const preview = this.game.assets.models[model.id].normal;
 
@@ -44,21 +48,23 @@ export class PlayerSelectScene {
     p5.textFont("IBM Plex Sans");
     p5.textSize(18);
     p5.fill("#b5c0d3");
-    p5.text("Usa izquierda o derecha para elegir el modelo. Ambos players pueden usar el mismo o uno diferente.", 110, 154, 560);
+    p5.text("Usa izquierda, derecha, arriba y abajo para elegir el modelo. Ambos players pueden usar el mismo o uno diferente.", 110, 154, 560);
     p5.pop();
 
     p5.push();
     p5.fill("rgba(14, 24, 39, 0.92)");
     p5.stroke("rgba(164, 187, 220, 0.16)");
-    p5.rect(110, 226, 540, 132, 22);
-    p5.rect(110, 386, 540, 150, 22);
+    p5.rect(110, 226, 540, 236, 22);
+    p5.rect(110, 500, 540, 112, 22);
     p5.pop();
 
     this.game.config.playerSelect.models.forEach((option, index) => {
+      const row = Math.floor(index / 2);
+      const column = index % 2;
       const active = modelIndex === index;
       this.drawOptionCard(p5, {
-        x: 146 + index * 250,
-        y: 252,
+        x: 146 + column * 250,
+        y: 252 + row * 104,
         width: 224,
         height: 88,
         title: option.title,
@@ -68,8 +74,8 @@ export class PlayerSelectScene {
       });
     });
 
-    this.drawLockedPlayerCard(p5, 146, 410, "Player 1", lockedLeft, this.currentSlot === "left");
-    this.drawLockedPlayerCard(p5, 406, 410, "Player 2", lockedRight, this.currentSlot === "right");
+    this.drawLockedPlayerCard(p5, 146, 506, "Player 1", lockedLeft, this.currentSlot === "left");
+    this.drawLockedPlayerCard(p5, 406, 506, "Player 2", lockedRight, this.currentSlot === "right");
 
     p5.push();
     p5.fill("rgba(10, 18, 31, 0.88)");
@@ -79,7 +85,7 @@ export class PlayerSelectScene {
     p5.pop();
 
     if (preview) {
-      drawImageCentered(p5, preview, 943, 388, 270, 270, {
+      drawImageCentered(p5, preview, 943, 404, 214, 214, {
         flipX: this.currentSlot === "right",
       });
     }
@@ -136,6 +142,8 @@ export class PlayerSelectScene {
   handleAction(action) {
     if (action === "NAV_LEFT") this.selector.moveLeft();
     if (action === "NAV_RIGHT") this.selector.moveRight();
+    if (action === "NAV_UP") this.selector.moveUp();
+    if (action === "NAV_DOWN") this.selector.moveDown();
 
     if (action === "BACK") {
       this.game.sceneManager.change("main-menu");
@@ -143,15 +151,17 @@ export class PlayerSelectScene {
     }
 
     if (action === "CONFIRM") {
-      const selection = this.selector.getSelection();
-      const model = this.game.config.playerSelect.models[selection.columnIndexes[0]];
+      const model = this.game.config.playerSelect.models[this.getActiveModelIndex()];
       this.game.state.setPlayer(this.currentSlot, { modelId: model.id });
 
       if (this.currentSlot === "left") {
         this.currentSlot = "right";
         const currentRightModel = this.game.state.selectedPlayers.right.modelId;
         const nextIndex = this.game.config.playerSelect.models.findIndex((entry) => entry.id === currentRightModel);
-        this.selector.columnIndexes[0] = Math.max(0, nextIndex);
+        const safeIndex = Math.max(0, nextIndex);
+        this.selector.rowIndex = Math.floor(safeIndex / 2);
+        this.selector.columnIndexes = [0, 0];
+        this.selector.columnIndexes[this.selector.rowIndex] = safeIndex % 2;
       } else {
         this.game.sceneManager.change("stage-select");
       }

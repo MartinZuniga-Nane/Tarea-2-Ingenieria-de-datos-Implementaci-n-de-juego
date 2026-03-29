@@ -23,8 +23,10 @@ export const duelConfig = {
   },
   playerSelect: {
     models: [
-      { id: "model1", title: "Gunslinger Prime", description: "Modelo base 01" },
-      { id: "model2", title: "Crimson Warden", description: "Modelo base 02" },
+      { id: "luffy", title: "Ace V2", description: "Sprite clasico alternativo" },
+      { id: "ace", title: "Portgas D. Ace", description: "Fuego y postura desafiante" },
+      { id: "sanji", title: "Sanji", description: "Patadas rapidas y destellos" },
+      { id: "shanks", title: "Shanks", description: "Sprite clasico alternativo" },
     ],
   },
   stageSelect: {
@@ -46,11 +48,11 @@ export const duelConfig = {
     },
   },
   fighter: {
-    left: { x: 334, y: 532, width: 228, height: 228 },
-    right: { x: 946, y: 532, width: 228, height: 228 },
+    left: { x: 344, y: 556, width: 184, height: 184 },
+    right: { x: 936, y: 556, width: 184, height: 184 },
     effectOffsets: {
-      left: { attack: { x: 92, y: -42 }, hit: { x: 70, y: -38 } },
-      right: { attack: { x: -92, y: -42 }, hit: { x: -70, y: -38 } },
+      left: { attack: { x: 78, y: -26 }, hit: { x: 58, y: -24 } },
+      right: { attack: { x: -78, y: -26 }, hit: { x: -58, y: -24 } },
     },
   },
 };

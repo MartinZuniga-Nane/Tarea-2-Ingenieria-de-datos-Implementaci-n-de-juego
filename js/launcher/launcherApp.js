@@ -15,12 +15,10 @@ export class LauncherApp {
         <div class="launcher__brand">
           <div class="pill">Arcade Library</div>
           <h1>Tu galeria de duelos gestuales</h1>
-          <p>Interfaz base para juegos web con canvas, escenas reutilizables y control por hand tracking.</p>
         </div>
 
         <section class="launcher__menu">
           <h2>Navegacion</h2>
-          <p>La biblioteca queda lista para sumar mas proyectos sin romper el layout ni el router.</p>
           <ul>
             <li><button class="launcher__menu-btn is-active" type="button" data-route="launcher">Libreria</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="duel">Duel</button></li>
@@ -39,18 +37,14 @@ export class LauncherApp {
           title: "Duel",
           tag: "Juego principal",
           description: "Duelo 1v1 con seleccion por gestos, flujo de combate por estados y soporte de teclado para debug.",
-          meta: "p5.js + ml5.js + ES Modules",
           cover: "./assets/launcher/duel-cover.png",
-          details: "Seleccion de personajes, fondos, combate por ventana de disparo y resultado con revancha.",
         },
         {
           id: "gravity-weaver",
           title: "Gravity Weaver",
           tag: "Nuevo puzzle",
           description: "Puzzle fisico neon donde manipulas la gravedad por poses de mano o con flechas como respaldo.",
-          meta: "p5.js + ml5.js Teachable Machine",
           cover: "./assets/launcher/duel-cover.png",
-          details: "Controla la gravedad en tiempo real para esquivar obstaculos y llegar al portal con inercia y rebotes.",
         },
       ],
       onPlay: (game) => this.router.navigate(game.id),

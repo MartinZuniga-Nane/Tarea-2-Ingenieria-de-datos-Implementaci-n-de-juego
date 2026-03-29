@@ -24,11 +24,7 @@
   line-height: 0.95;
 }
 
-.launcher__brand p,
-.launcher__menu p,
-.library__header p,
-.game-card__copy p,
-.game-card__meta {
+.game-card__copy p {
   color: var(--text-soft);
 }
 
@@ -101,6 +97,18 @@
   margin-bottom: 1.75rem;
 }
 
+.library__heading {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.library__heading .pill,
+.library__heading h2 {
+  margin: 0;
+}
+
 .library__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
@@ -143,7 +151,7 @@
   flex-direction: column;
   justify-content: end;
   padding: 2rem;
-  gap: 1rem;
+  gap: 1.2rem;
 }
 
 .game-card__copy h3 {
@@ -156,6 +164,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem;
+}
+
+.game-card__actions .launcher-btn {
+  min-width: 132px;
 }
 
 .launcher-btn,

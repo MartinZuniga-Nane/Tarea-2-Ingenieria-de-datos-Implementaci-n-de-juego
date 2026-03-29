@@ -59,13 +59,44 @@ export class HandposeAdapter {
     }
 
     if (typeof window.ml5.handPose === "function") {
-      const options = {
-        maxHands: 2,
-        flipped: true,
-        runtime: "mediapipe",
-      };
+      const optionSets = [
+        {
+          maxHands: 2,
+          flipped: true,
+          runtime: "mediapipe",
+        },
+        {
+          maxHands: 2,
+          flipHorizontal: true,
+          runtime: "mediapipe",
+        },
+        {
+          maxHands: 2,
+          flipped: true,
+          runtime: "tfjs",
+        },
+        {
+          maxHands: 2,
+          flipHorizontal: true,
+          runtime: "tfjs",
+        },
+      ];
 
-      return this.withTimeout(this.resolveHandPoseModel(options), 12000, "HandPose tardo demasiado en cargar");
+      const errors = [];
+
+      for (const options of optionSets) {
+        try {
+          return await this.withTimeout(
+            this.resolveHandPoseModel(options),
+            12000,
+            `HandPose tardo demasiado en cargar (${options.runtime})`
+          );
+        } catch (error) {
+          errors.push(`${options.runtime}: ${error.message}`);
+        }
+      }
+
+      throw new Error(`No fue posible inicializar HandPose. Intentos: ${errors.join(" | ")}`);
     }
 
     if (typeof window.ml5.handpose === "function") {
@@ -82,6 +113,10 @@ export class HandposeAdapter {
   }
 
   startDetectionLoop() {
+    if (!this.model) {
+      throw new Error("HandPose no termino de cargar correctamente");
+    }
+
     if (typeof this.model.detectStart === "function") {
       this.model.detectStart(this.video, (results) => {
         this.predictions = Array.isArray(results) ? results : [];
@@ -121,8 +156,8 @@ export class HandposeAdapter {
 
   async resolveHandPoseModel(options) {
     const attempts = [
-      () => window.ml5.handPose(this.video, options),
       () => window.ml5.handPose(options),
+      () => window.ml5.handPose("MediaPipeHands", options),
     ];
 
     let lastError = null;
@@ -131,6 +166,9 @@ export class HandposeAdapter {
       try {
         const result = attempt();
         const model = await Promise.resolve(result);
+        if (model?.ready && typeof model.ready.then === "function") {
+          await model.ready;
+        }
         if (model) {
           return model;
         }
@@ -179,6 +217,7 @@ export class HandposeAdapter {
 
   dispose() {
     this.status = "disposed";
+    this.model?.detectStop?.();
     const tracks = this.video?.srcObject?.getTracks?.() ?? [];
     tracks.forEach((track) => track.stop());
     this.video?.remove();
