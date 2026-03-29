@@ -4,13 +4,28 @@ export class Router {
   constructor(root) {
     this.root = root;
     this.currentView = null;
+    this.currentRoute = null;
+    this.currentPayload = {};
+    this.routeHistory = [];
   }
 
   async start() {
-    await this.navigate("launcher");
+    await this.navigate("launcher", {}, { fromBack: true });
   }
 
-  async navigate(route, payload = {}) {
+  async navigate(route, payload = {}, options = {}) {
+    const { fromBack = false } = options;
+
+    if (!fromBack && this.currentRoute && this.currentRoute !== route) {
+      this.routeHistory.push({
+        route: this.currentRoute,
+        payload: this.currentPayload,
+      });
+    }
+
+    this.currentRoute = route;
+    this.currentPayload = payload;
+
     this.currentView?.destroy?.();
     this.root.innerHTML = "";
 
@@ -48,5 +63,15 @@ export class Router {
       `;
       console.error(error);
     }
+  }
+
+  async back() {
+    const previous = this.routeHistory.pop();
+    if (!previous) {
+      await this.navigate("launcher", {}, { fromBack: true });
+      return;
+    }
+
+    await this.navigate(previous.route, previous.payload ?? {}, { fromBack: true });
   }
 }

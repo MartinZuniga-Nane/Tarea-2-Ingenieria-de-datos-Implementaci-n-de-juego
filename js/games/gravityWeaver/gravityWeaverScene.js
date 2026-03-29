@@ -1,4 +1,5 @@
 import { Modal } from "../../shared/ui/modal.js";
+import { createGameSidebar } from "../../shared/ui/gameSidebar.js";
 import { Astronaut } from "./astronaut.js";
 import { gravityWeaverConfig } from "./config.js";
 import { loadGravityWeaverAssets } from "./gravityWeaverAssets.js";
@@ -141,6 +142,7 @@ export class GravityWeaverScene {
     this.classifyTimeoutId = null;
     this.destroyed = false;
     this.modal = null;
+    this.gameSidebar = null;
   }
 
   mount() {
@@ -199,6 +201,11 @@ export class GravityWeaverScene {
     this.aliasInput = this.root.querySelector('[data-role="alias-input"]');
     this.aliasError = this.root.querySelector('[data-role="alias-error"]');
     this.modal = new Modal(this.shell);
+    this.gameSidebar = createGameSidebar({
+      onNavigate: (route) => this.router.navigate(route),
+      onBack: () => this.router.back(),
+    });
+    this.shell.appendChild(this.gameSidebar.element);
     this.topbar?.classList.add("hidden");
     this.debugPanel?.classList.add("hidden");
     this.cameraPanel?.classList.add("hidden");
@@ -1211,6 +1218,7 @@ export class GravityWeaverScene {
     this.aliasForm?.removeEventListener("submit", this.handleAliasSubmit);
     this.aliasInput?.removeEventListener("keydown", this.handleAliasKeyDown);
     this.modal?.hide();
+    this.gameSidebar?.destroy();
     this.sketch?.remove();
     this.video?.remove();
 

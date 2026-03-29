@@ -22,9 +22,9 @@ export class LauncherApp {
           <h2>Navegacion</h2>
           <p>La biblioteca queda lista para sumar mas proyectos sin romper el layout ni el router.</p>
           <ul>
-            <li>Libreria</li>
-            <li>Duel</li>
-            <li>Gravity Weaver</li>
+            <li><button class="launcher__menu-btn is-active" type="button" data-route="launcher">Libreria</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="duel">Duel</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="gravity-weaver">Gravity Weaver</button></li>
           </ul>
         </section>
       </aside>
@@ -57,11 +57,29 @@ export class LauncherApp {
     });
 
     shell.querySelector(".launcher__content").appendChild(view.render());
+
+    this.menuClickHandler = (event) => {
+      const button = event.target.closest(".launcher__menu-btn");
+      if (!button) {
+        return;
+      }
+
+      const route = button.dataset.route;
+      if (!route) {
+        return;
+      }
+
+      this.router.navigate(route);
+    };
+
+    shell.querySelector(".launcher__menu")?.addEventListener("click", this.menuClickHandler);
+
     this.root.appendChild(shell);
     this.element = shell;
   }
 
   destroy() {
+    this.element?.querySelector(".launcher__menu")?.removeEventListener("click", this.menuClickHandler);
     this.element?.remove();
   }
 }
