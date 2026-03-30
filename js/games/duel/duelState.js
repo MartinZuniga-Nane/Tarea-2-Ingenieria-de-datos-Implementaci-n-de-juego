@@ -7,8 +7,8 @@ export class DuelState {
   resetRun() {
     this.hasSeenControls = false;
     this.selectedPlayers = {
-      left: { modelId: "model1" },
-      right: { modelId: "model2" },
+      left: { modelId: "luffy" },
+      right: { modelId: "ace" },
     };
     this.selectedStage = "bg1";
     this.lastBattle = null;

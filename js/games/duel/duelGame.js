@@ -47,7 +47,7 @@ export class DuelGame {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Duel...</div>
-            <div class="pill">A/D/W/S navegar | Enter confirmar | F dispara P1 | K dispara P2 | Esc volver</div>
+            <div class="pill game-shell__controls-pill">A/D/W/S navegar | Enter confirmar | F P1 | K P2 | Esc volver</div>
           </div>
           <aside class="game-shell__debug ${this.config.debug.enabled ? "" : "hidden"}" data-role="debug-panel">
             <h3>Debug HandPose</h3>
@@ -104,17 +104,20 @@ export class DuelGame {
     try {
       await this.handpose.init();
       this.modal.hide();
+      this.statusPill.textContent = "Duel - gestos listos";
       if (this.handpose.video) {
         this.cameraPanel.classList.remove("hidden");
         this.cameraPanel.appendChild(this.handpose.video);
       }
     } catch (error) {
+      this.statusPill.textContent = "Duel - solo teclado";
       this.modal.show({
-        title: "Camara no disponible",
-        message: "El juego seguira funcionando con teclado. Si quieres gestos, habilita permisos de camara y recarga la pagina.",
+        title: "Gestos no disponibles",
+        message: `El juego seguira funcionando con teclado. Revisa permisos de camara, usa localhost o HTTPS y confirma que tu red permite cargar ml5/HandPose. Detalle: ${error.message}`,
         dismissLabel: "Seguir sin camara",
-        autoHideMs: 3200,
+        autoHideMs: 5200,
       });
+      console.error("No se pudo inicializar HandPose:", error);
     }
   }
 

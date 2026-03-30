@@ -13,12 +13,11 @@ export class LibraryView {
     section.innerHTML = `
       <div class="library__veil"></div>
       <header class="library__header">
-        <div>
+        <div class="library__heading">
           <div class="pill">Coleccion activa</div>
           <h2>Libreria</h2>
-          <p>Launcher modular preparado para sumar nuevos juegos sin tocar el flujo principal.</p>
         </div>
-        <div class="pill">${this.games.length} juego disponible</div>
+        <div class="pill">${this.games.length} juegos disponibles</div>
       </header>
       <div class="library__grid"></div>
     `;

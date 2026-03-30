@@ -10,18 +10,13 @@ export function createGameCard(game, onPlay) {
         <h3>${game.title}</h3>
         <p>${game.description}</p>
       </div>
-      <div class="game-card__meta">${game.meta}</div>
       <div class="game-card__actions">
         <button class="launcher-btn" type="button">Jugar</button>
-        <button class="launcher-btn--ghost" type="button">Detalles</button>
       </div>
     </div>
   `;
 
   article.querySelector(".launcher-btn").addEventListener("click", () => onPlay(game));
-  article.querySelector(".launcher-btn--ghost").addEventListener("click", () => {
-    window.alert(game.details);
-  });
 
   return article;
 }
