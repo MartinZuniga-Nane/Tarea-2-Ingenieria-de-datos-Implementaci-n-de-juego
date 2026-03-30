@@ -15,6 +15,7 @@ export function createGameSidebar({
         <li><button type="button" data-action="back">Volver atras</button></li>
         <li><button type="button" data-action="launcher">Libreria</button></li>
         <li><button type="button" data-action="duel">Duel</button></li>
+        <li><button type="button" data-action="ufro-ninja">Ufro Ninja</button></li>
         <li><button type="button" data-action="gravity-weaver">Gravity Weaver</button></li>
         <li><button type="button" data-action="close">Cerrar</button></li>
       </ul>
