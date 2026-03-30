@@ -22,6 +22,7 @@ export class LauncherApp {
           <ul>
             <li><button class="launcher__menu-btn is-active" type="button" data-route="launcher">Libreria</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="duel">Duel</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="ufro-ninja">Ufro Ninja</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="gravity-weaver">Gravity Weaver</button></li>
           </ul>
         </section>
@@ -45,6 +46,15 @@ export class LauncherApp {
           tag: "Nuevo puzzle",
           description: "Puzzle fisico neon donde manipulas la gravedad por poses de mano o con flechas como respaldo.",
           cover: "./assets/launcher/duel-cover.png",
+        },
+        {
+          id: "ufro-ninja",
+          title: "Ufro Ninja",
+          tag: "Arcade IA",
+          description: "Arcade estilo fruit ninja por gestos con clasificador de Teachable Machine y camara en vivo.",
+          meta: "p5.js + ml5.js imageClassifier",
+          cover: "./assets/launcher/duel-cover.png",
+          details: "Corta frutas con gesto de ataque, evita perder vidas y mejora tu puntaje en dificultad progresiva.",
         },
       ],
       onPlay: (game) => this.router.navigate(game.id),
