@@ -24,8 +24,8 @@ const PLAY_ACTION_MAP = {
   THREE_FINGERS: "MENU",
 };
 const MAX_FRAME_TIME = 0.1;
-const FIXED_STEP = 1 / 120;
-const MAX_SUBSTEPS = 12;
+const FIXED_STEP = 1 / 60;
+const MAX_SUBSTEPS = 6;
 const MENU_GESTURE_PROFILE = {
   persistenceMs: 170,
   navigationCooldownMs: 170,
@@ -51,6 +51,14 @@ function rectsOverlap(a, b) {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
 }
 
+function setRect(rect, left, top, right, bottom) {
+  rect.left = left;
+  rect.top = top;
+  rect.right = right;
+  rect.bottom = bottom;
+  return rect;
+}
+
 function createCanvas(width, height) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -63,6 +71,7 @@ export class UfroDashGame {
     this.root = root;
     this.router = router;
     this.level = ufroDashLevel;
+    this.prepareLevelData();
     this.assets = null;
     this.modal = null;
     this.audio = null;
@@ -89,6 +98,8 @@ export class UfroDashGame {
     this.activeObstacleEnd = 0;
     this.visibleObstacles = [];
     this.playerRect = null;
+    this.previousPlayerRect = { left: 0, top: 0, right: 0, bottom: 0 };
+    this.obstacleRect = { left: 0, top: 0, right: 0, bottom: 0 };
     this.lastGroundedAt = 0;
     this.lastJumpPressedAt = 0;
     this.jumpQueued = false;
@@ -98,6 +109,13 @@ export class UfroDashGame {
     this.player = this.createPlayerState();
 
     this.handleKeyDown = this.handleKeyDown.bind(this);
+  }
+
+  prepareLevelData() {
+    this.level.obstacles.forEach((obstacle) => {
+      obstacle.right = obstacle.x + obstacle.width;
+      obstacle.bottom = obstacle.y + obstacle.height;
+    });
   }
 
   createPlayerState() {
@@ -312,7 +330,7 @@ export class UfroDashGame {
 
     this.consumeQueuedJump();
 
-    const previousRect = this.computePlayerRect();
+    const previousRect = this.computePlayerRect(this.previousPlayerRect);
     this.player.worldX += this.level.speed * dt;
     this.player.velocityY += this.level.gravity * dt;
     this.player.y += this.player.velocityY * dt;
@@ -329,7 +347,7 @@ export class UfroDashGame {
       }
 
       const obstacleLeft = obstacle.x;
-      const obstacleRight = obstacle.x + obstacle.width;
+      const obstacleRight = obstacle.right;
       const horizontalOverlap = previousRect.right - 6 > obstacleLeft && previousRect.left + 6 < obstacleRight;
 
       if (horizontalOverlap && previousRect.bottom <= obstacle.y + 10 && this.player.velocityY >= 0) {
@@ -350,15 +368,10 @@ export class UfroDashGame {
       this.player.grounded = false;
     }
 
-    this.playerRect = this.computePlayerRect();
+    this.playerRect = this.computePlayerRect(this.playerRect);
 
     for (const obstacle of this.visibleObstacles) {
-      const obstacleRect = {
-        left: obstacle.x,
-        right: obstacle.x + obstacle.width,
-        top: obstacle.y,
-        bottom: obstacle.y + obstacle.height,
-      };
+      const obstacleRect = setRect(this.obstacleRect, obstacle.x, obstacle.y, obstacle.right, obstacle.bottom);
 
       if (!rectsOverlap(this.playerRect, obstacleRect)) {
         continue;
@@ -418,10 +431,12 @@ export class UfroDashGame {
     const leftBound = this.cameraX - 120;
     const rightBound = this.cameraX + 1480;
     const obstacles = this.level.obstacles;
+    const previousStart = this.activeObstacleStart;
+    const previousEnd = this.activeObstacleEnd;
 
     while (
       this.activeObstacleStart < obstacles.length &&
-      obstacles[this.activeObstacleStart].x + obstacles[this.activeObstacleStart].width < leftBound
+      obstacles[this.activeObstacleStart].right < leftBound
     ) {
       this.activeObstacleStart += 1;
     }
@@ -434,20 +449,26 @@ export class UfroDashGame {
       this.activeObstacleEnd += 1;
     }
 
+    if (previousStart === this.activeObstacleStart && previousEnd === this.activeObstacleEnd) {
+      return;
+    }
+
     this.visibleObstacles.length = 0;
     for (let index = this.activeObstacleStart; index < this.activeObstacleEnd; index += 1) {
       this.visibleObstacles.push(obstacles[index]);
     }
   }
 
-  computePlayerRect() {
+  computePlayerRect(target = null) {
+    const nextTarget = target ?? { left: 0, top: 0, right: 0, bottom: 0 };
     const half = this.level.playerSize / 2 - 4;
-    return {
-      left: this.player.worldX - half,
-      right: this.player.worldX + half,
-      top: this.player.y - half,
-      bottom: this.player.y + half,
-    };
+    return setRect(
+      nextTarget,
+      this.player.worldX - half,
+      this.player.y - half,
+      this.player.worldX + half,
+      this.player.y + half,
+    );
   }
 
   handleKeyDown(event) {

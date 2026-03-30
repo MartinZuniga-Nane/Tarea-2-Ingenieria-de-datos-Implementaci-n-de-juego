@@ -47,7 +47,7 @@ export const ufroDashLevel = {
 
     spike(7544, 534, 2),
     flat(7968, 1),
-    ...pillar(8360, 422, 3),
+    ...pillar(8360, 422, 2),
     spike(8812, 534, 2),
     flat(9248, 3),
   ],
