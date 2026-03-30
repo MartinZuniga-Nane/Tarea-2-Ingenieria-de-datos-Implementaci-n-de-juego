@@ -1,12 +1,17 @@
 export class HandposeAdapter {
-  constructor({ debug = false } = {}) {
+  constructor({ debug = false, maxHands = 2, detectIntervalMs = 0, videoWidth = 640, videoHeight = 480 } = {}) {
     this.debug = debug;
+    this.maxHands = maxHands;
+    this.detectIntervalMs = Math.max(0, detectIntervalMs);
+    this.videoWidth = videoWidth;
+    this.videoHeight = videoHeight;
     this.video = null;
     this.model = null;
     this.predictions = [];
     this.status = "idle";
     this.error = null;
     this.listeners = new Set();
+    this.lastDetectAt = 0;
   }
 
   async init() {
@@ -37,7 +42,7 @@ export class HandposeAdapter {
     video.className = "handpose-video";
 
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { width: 640, height: 480, facingMode: "user" },
+      video: { width: this.videoWidth, height: this.videoHeight, facingMode: "user" },
       audio: false,
     });
 
@@ -61,22 +66,22 @@ export class HandposeAdapter {
     if (typeof window.ml5.handPose === "function") {
       const optionSets = [
         {
-          maxHands: 2,
+          maxHands: this.maxHands,
           flipped: true,
           runtime: "mediapipe",
         },
         {
-          maxHands: 2,
+          maxHands: this.maxHands,
           flipHorizontal: true,
           runtime: "mediapipe",
         },
         {
-          maxHands: 2,
+          maxHands: this.maxHands,
           flipped: true,
           runtime: "tfjs",
         },
         {
-          maxHands: 2,
+          maxHands: this.maxHands,
           flipHorizontal: true,
           runtime: "tfjs",
         },
@@ -119,6 +124,10 @@ export class HandposeAdapter {
 
     if (typeof this.model.detectStart === "function") {
       this.model.detectStart(this.video, (results) => {
+        if (!this.canAcceptDetection()) {
+          return;
+        }
+
         this.predictions = Array.isArray(results) ? results : [];
         this.emit();
       });
@@ -127,6 +136,10 @@ export class HandposeAdapter {
 
     if (typeof this.model.on === "function") {
       this.model.on("predict", (results) => {
+        if (!this.canAcceptDetection()) {
+          return;
+        }
+
         this.predictions = Array.isArray(results) ? results : [];
         this.emit();
       });
@@ -136,6 +149,16 @@ export class HandposeAdapter {
     if (typeof this.model.detect === "function") {
       const detectFrame = async () => {
         if (this.status === "disposed") {
+          return;
+        }
+
+        if (document.hidden) {
+          window.setTimeout(() => requestAnimationFrame(detectFrame), Math.max(120, this.detectIntervalMs));
+          return;
+        }
+
+        if (!this.canAcceptDetection()) {
+          requestAnimationFrame(detectFrame);
           return;
         }
 
@@ -152,6 +175,15 @@ export class HandposeAdapter {
 
       detectFrame();
     }
+  }
+
+  canAcceptDetection(now = performance.now()) {
+    if (this.detectIntervalMs > 0 && now - this.lastDetectAt < this.detectIntervalMs) {
+      return false;
+    }
+
+    this.lastDetectAt = now;
+    return true;
   }
 
   async resolveHandPoseModel(options) {
@@ -204,6 +236,10 @@ export class HandposeAdapter {
 
   getPredictions() {
     return [...this.predictions];
+  }
+
+  getPredictionsRef() {
+    return this.predictions;
   }
 
   getDetectionState() {

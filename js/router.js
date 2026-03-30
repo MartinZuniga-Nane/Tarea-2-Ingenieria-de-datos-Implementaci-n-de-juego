@@ -37,9 +37,17 @@ export class Router {
           router: this,
           payload,
         });
+
       } else if (route === "ufro-ninja") {
         const { UfroNinjaScene } = await import("./games/ufroNinja/ufroNinjaScene.js");
         this.currentView = new UfroNinjaScene({
+          root: this.root,
+          router: this,
+          payload,
+        });
+      } else if (route === "ufro-dash") {
+        const { UfroDashGame } = await import("./games/ufroDash/ufroDashGame.js");
+        this.currentView = new UfroDashGame({
           root: this.root,
           router: this,
           payload,

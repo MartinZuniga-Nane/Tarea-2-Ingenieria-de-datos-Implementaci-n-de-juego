@@ -15,12 +15,15 @@ export class GestureController {
     this.interpreter = new GestureInterpreter();
     this.actionMap = { ...DEFAULT_ACTION_MAP, ...(options.actionMap ?? {}) };
     this.persistenceMs = options.persistenceMs ?? 280;
+    this.navigationCooldownMs = options.navigationCooldownMs ?? 220;
+    this.confirmCooldownMs = options.confirmCooldownMs ?? 650;
+    this.shootCooldownMs = options.shootCooldownMs ?? 650;
     this.cooldowns = new CooldownMap({
-      navigation: options.navigationCooldownMs ?? 220,
-      confirm: options.confirmCooldownMs ?? 650,
-      shoot: options.shootCooldownMs ?? 650,
-      "shoot-left": options.shootCooldownMs ?? 650,
-      "shoot-right": options.shootCooldownMs ?? 650,
+      navigation: this.navigationCooldownMs,
+      confirm: this.confirmCooldownMs,
+      shoot: this.shootCooldownMs,
+      "shoot-left": this.shootCooldownMs,
+      "shoot-right": this.shootCooldownMs,
     });
     this.stableLabel = "NONE";
     this.candidateLabel = "NONE";
@@ -33,10 +36,31 @@ export class GestureController {
     this.actionMap = { ...DEFAULT_ACTION_MAP, ...(actionMap ?? {}) };
   }
 
+  setTimings({ persistenceMs, navigationCooldownMs, confirmCooldownMs, shootCooldownMs } = {}) {
+    if (typeof persistenceMs === "number") {
+      this.persistenceMs = persistenceMs;
+    }
+
+    const nextNavigation = navigationCooldownMs ?? this.navigationCooldownMs;
+    const nextConfirm = confirmCooldownMs ?? this.confirmCooldownMs;
+    const nextShoot = shootCooldownMs ?? this.shootCooldownMs;
+
+    this.navigationCooldownMs = nextNavigation;
+    this.confirmCooldownMs = nextConfirm;
+    this.shootCooldownMs = nextShoot;
+    this.cooldowns = new CooldownMap({
+      navigation: nextNavigation,
+      confirm: nextConfirm,
+      shoot: nextShoot,
+      "shoot-left": nextShoot,
+      "shoot-right": nextShoot,
+    });
+  }
+
   update(now = performance.now()) {
     const actions = [];
 
-    const predictions = this.adapter.getPredictions?.() ?? [this.adapter.getPrimaryPrediction()].filter(Boolean);
+    const predictions = this.adapter.getPredictionsRef?.() ?? this.adapter.getPredictions?.() ?? [this.adapter.getPrimaryPrediction()].filter(Boolean);
     const interpretations = predictions.map((prediction) => this.interpreter.interpret(prediction));
     const primary = interpretations[0] ?? { label: "NONE", confidence: 0, landmarks: null, handedness: null };
     this.lastInterpretation = primary;

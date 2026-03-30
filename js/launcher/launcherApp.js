@@ -23,6 +23,7 @@ export class LauncherApp {
             <li><button class="launcher__menu-btn is-active" type="button" data-route="launcher">Libreria</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="duel">Duel</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-ninja">Ufro Ninja</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="ufro-dash">UfroDash</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="gravity-weaver">Gravity Weaver</button></li>
           </ul>
         </section>
@@ -39,6 +40,13 @@ export class LauncherApp {
           tag: "Juego principal",
           description: "Duelo 1v1 con seleccion por gestos, flujo de combate por estados y soporte de teclado para debug.",
           cover: "./assets/launcher/duel-cover.png",
+        },
+        {
+          id: "ufro-dash",
+          title: "UfroDash",
+          tag: "Arcade runner",
+          description: "Carrera inspirada en Geometry Dash con salto automatico, nivel propio y soporte de mano abierta para saltar.",
+          cover: "./assets/games/geometrydashassets/PC _ Computer - Geometry Dash - Backgrounds and Grounds - Background 01.png",
         },
         {
           id: "gravity-weaver",
