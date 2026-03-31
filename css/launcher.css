@@ -2,6 +2,8 @@
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .launcher__sidebar {
@@ -9,6 +11,7 @@
   padding: 2rem 1.5rem;
   border-right: 1px solid rgba(166, 190, 226, 0.12);
   background: linear-gradient(180deg, rgba(5, 11, 19, 0.8), rgba(8, 17, 29, 0.94));
+  overflow-y: auto;
 }
 
 .launcher__brand {
@@ -80,6 +83,7 @@
 .launcher__content {
   position: relative;
   padding: 2rem;
+  overflow-y: auto;
 }
 
 .library {
@@ -210,15 +214,19 @@
 @media (max-width: 900px) {
   .launcher {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: auto;
   }
 
   .launcher__sidebar {
     border-right: 0;
     border-bottom: 1px solid rgba(166, 190, 226, 0.12);
+    overflow: visible;
   }
 
   .launcher__content {
     padding: 1.25rem;
+    overflow: visible;
   }
 
   .game-card,
