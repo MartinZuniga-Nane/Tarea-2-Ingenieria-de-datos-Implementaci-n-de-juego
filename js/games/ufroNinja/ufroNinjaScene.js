@@ -26,6 +26,21 @@ function resolveDrawableVideoSource(videoLike) {
   return videoLike.elt || videoLike;
 }
 
+function isDrawableImageSource(source) {
+  return typeof HTMLImageElement !== "undefined"
+    && source instanceof HTMLImageElement
+    && source.complete
+    && source.naturalWidth > 0;
+}
+
+function isDrawableVideoSource(source) {
+  return typeof HTMLVideoElement !== "undefined"
+    && source instanceof HTMLVideoElement
+    && source.readyState >= 2
+    && source.videoWidth > 0
+    && source.videoHeight > 0;
+}
+
 function isFinitePositive(value) {
   return Number.isFinite(value) && value > 0;
 }
@@ -81,8 +96,13 @@ class Fruit {
     p5.push();
     p5.translate(this.x, this.y);
     p5.rotate(this.rotation);
-    p5.textSize(this.r * 2);
-    p5.text(this.icon, 0, 0);
+    if (isDrawableImageSource(this.icon)) {
+      const size = this.r * 2;
+      p5.drawingContext.drawImage(this.icon, -size / 2, -size / 2, size, size);
+    } else {
+      p5.textSize(this.r * 2);
+      p5.text(this.icon, 0, 0);
+    }
     p5.pop();
   }
 }
@@ -109,10 +129,18 @@ class Particle {
   draw(p5) {
     p5.push();
     p5.translate(this.x, this.y);
-    p5.drawingContext.globalAlpha = Math.max(this.life / 255, 0);
-    p5.textSize(this.size);
-    p5.text(this.icon, 0, 0);
-    p5.drawingContext.globalAlpha = 1;
+    const alpha = Math.max(this.life, 0);
+    if (isDrawableImageSource(this.icon)) {
+      const previousAlpha = p5.drawingContext.globalAlpha;
+      p5.drawingContext.globalAlpha = alpha / 255;
+      p5.drawingContext.drawImage(this.icon, -this.size / 2, -this.size / 2, this.size, this.size);
+      p5.drawingContext.globalAlpha = previousAlpha;
+    } else {
+      p5.drawingContext.globalAlpha = alpha / 255;
+      p5.textSize(this.size);
+      p5.text(this.icon, 0, 0);
+      p5.drawingContext.globalAlpha = 1;
+    }
     p5.pop();
   }
 }
@@ -137,12 +165,15 @@ export class UfroNinjaScene {
     this.fruits = [];
     this.particles = [];
     this.icons = ["🍎", "🍌", "🍉", "🍍", "🥥", "🥝", "🍊"];
+    this.backgroundImage = null;
+    this.fruitImages = [];
 
     this.destroyed = false;
     this.modal = null;
     this.gameSidebar = null;
     this.mlAvailable = false;
     this.drawCameraInCanvas = true;
+    this.drawBackgroundInCanvas = true;
     this.modelMetadata = null;
     this.modelLabelSet = null;
     this.lastRawLabel = "-";
@@ -203,6 +234,8 @@ export class UfroNinjaScene {
     const ml5Promise = window.__ml5Ready ?? (window.ml5 ? Promise.resolve(window.ml5) : Promise.reject(new Error("ml5.js no pudo cargarse")));
     await Promise.all([p5Promise, ml5Promise]);
 
+    await this.loadVisualAssets();
+
     this.sketch = new window.p5(this.createSketch());
 
     try {
@@ -222,6 +255,44 @@ export class UfroNinjaScene {
     }
 
     this.updateStatus();
+  }
+
+  async loadVisualAssets() {
+    const assetsConfig = this.config.assets ?? {};
+    const backgroundPath = assetsConfig.backgroundPath;
+    const fruitPaths = Array.isArray(assetsConfig.fruitPaths) ? assetsConfig.fruitPaths : [];
+
+    if (backgroundPath) {
+      try {
+        this.backgroundImage = await this.loadImageAsset(backgroundPath);
+      } catch (error) {
+        console.warn("Ufro Ninja no pudo cargar background:", error?.message ?? error);
+      }
+    }
+
+    if (fruitPaths.length > 0) {
+      const results = await Promise.all(
+        fruitPaths.map(async (path) => {
+          try {
+            return await this.loadImageAsset(path);
+          } catch (error) {
+            console.warn(`Ufro Ninja no pudo cargar fruta ${path}:`, error?.message ?? error);
+            return null;
+          }
+        }),
+      );
+      this.fruitImages = results.filter(Boolean);
+    }
+  }
+
+  loadImageAsset(relativePath) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.decoding = "async";
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error(`No se pudo cargar ${relativePath}`));
+      image.src = new URL(relativePath, window.location.href).href;
+    });
   }
 
   createSketch() {
@@ -565,17 +636,27 @@ export class UfroNinjaScene {
   renderFrame(p5) {
     p5.background("#08090d");
 
-    const drawableVideo = resolveDrawableVideoSource(this.video);
-    const isHtmlVideo = typeof HTMLVideoElement !== "undefined" && drawableVideo instanceof HTMLVideoElement;
-    const canDrawVideo = isHtmlVideo && drawableVideo.readyState >= 2 && drawableVideo.videoWidth > 0;
+    const hasBackgroundImage = isDrawableImageSource(this.backgroundImage);
 
-    if (canDrawVideo && this.drawCameraInCanvas) {
+    if (hasBackgroundImage && this.drawBackgroundInCanvas) {
       try {
-        p5.push();
-        p5.translate(p5.width, 0);
-        p5.scale(-1, 1);
-        p5.image(drawableVideo, 0, 0, p5.width, p5.height);
-        p5.pop();
+        p5.drawingContext.drawImage(this.backgroundImage, 0, 0, p5.width, p5.height);
+      } catch (error) {
+        this.drawBackgroundInCanvas = false;
+        console.warn("Ufro Ninja desactivo background de imagen:", error?.message ?? error);
+      }
+    }
+
+    const drawableVideo = resolveDrawableVideoSource(this.video);
+    const canDrawVideo = isDrawableVideoSource(drawableVideo);
+
+    if ((!hasBackgroundImage || !this.drawBackgroundInCanvas) && canDrawVideo && this.drawCameraInCanvas) {
+      try {
+        p5.drawingContext.save();
+        p5.drawingContext.translate(p5.width, 0);
+        p5.drawingContext.scale(-1, 1);
+        p5.drawingContext.drawImage(drawableVideo, 0, 0, p5.width, p5.height);
+        p5.drawingContext.restore();
       } catch (error) {
         this.drawCameraInCanvas = false;
         console.warn("Ufro Ninja desactivo fondo de camara en canvas:", error?.message ?? error);
@@ -672,7 +753,8 @@ export class UfroNinjaScene {
     );
 
     if (p5.frameCount % Math.floor(spawnRate) === 0) {
-      this.fruits.push(new Fruit(this.icons, p5, this.config.game.gravity));
+      const fruitAssets = this.fruitImages.length > 0 ? this.fruitImages : this.icons;
+      this.fruits.push(new Fruit(fruitAssets, p5, this.config.game.gravity));
     }
 
     for (let index = this.fruits.length - 1; index >= 0; index -= 1) {
