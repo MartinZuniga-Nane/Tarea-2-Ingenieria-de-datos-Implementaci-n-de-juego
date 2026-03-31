@@ -5,8 +5,8 @@ export const gravityWeaverConfig = {
     minHeight: 540,
   },
   ml: {
-    teachableModelUrl: "https://teachablemachine.withgoogle.com/models/TU_MODELO/",
-    classifyIntervalMs: 90,
+    gesturePersistenceMs: 220,
+    minGestureConfidence: 0.58,
   },
   score: {
     baseLevelScore: 1000,
@@ -111,14 +111,5 @@ export const gravityWeaverConfig = {
     textColor: "#ebf2ff",
     textSoftColor: "#aebad9",
     warningColor: "#ffd48a",
-  },
-  input: {
-    labelsToVectors: {
-      arriba: { x: 0, y: -1 },
-      abajo: { x: 0, y: 1 },
-      izquierda: { x: -1, y: 0 },
-      derecha: { x: 1, y: 0 },
-      neutral: { x: 0, y: 0 },
-    },
   },
 };
