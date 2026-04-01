@@ -8,8 +8,8 @@ export const gravityWeaverLevels = [
     spawn: { x: 52, y: 344 },
     portal: { x: 1200, y: 314, width: 64, height: 64 },
     orbs: [
-      { x: 360, y: 480, radius: 16 },
-      { x: 1040, y: 220, radius: 16 },
+      { x: 360, y: 380, radius: 16 },
+      { x: 1040, y: 320, radius: 16 },
     ],
     obstacles: [
       { x: 90, y: 0, width: 30, height: 240 },

@@ -188,7 +188,7 @@ export class GravityWeaverScene {
     this.stableInputLabel = "neutral";
     this.candidateInputLabel = "neutral";
     this.candidateInputSince = 0;
-    this.lastAcceptedInputLabel = "neutral";
+    this.lastEmittedInputLabel = "neutral";
     this.pendingInputVector = null;
     this.flipCanvas = null;
     this.flipContext = null;
@@ -545,6 +545,7 @@ export class GravityWeaverScene {
     this.currentGravity.y = 0;
     this.targetGravity.x = 0;
     this.targetGravity.y = 0;
+    this.pendingInputVector = null;
 
     this.animation.state = "idle";
     this.animation.baseState = "idle";
@@ -1088,8 +1089,11 @@ export class GravityWeaverScene {
       this.classifier = await this.createClassifier();
       this.mlState = "ready";
       this.currentLabel = "Neutral";
-      this.lastAcceptedInputLabel = "neutral";
-      this.pendingInputVector = this.mapInputLabelToVector("neutral");
+      this.stableInputLabel = "neutral";
+      this.candidateInputLabel = "neutral";
+      this.candidateInputSince = performance.now();
+      this.lastEmittedInputLabel = "neutral";
+      this.pendingInputVector = null;
       this.scheduleClassification(0);
     } catch (error) {
       this.mlState = "fallback";
@@ -1334,9 +1338,13 @@ export class GravityWeaverScene {
 
     const persistenceMs = this.config.input.persistenceMs ?? 220;
     if (now - this.candidateInputSince >= persistenceMs) {
-      this.stableInputLabel = normalizedLabel;
-      if (normalizedLabel !== this.lastAcceptedInputLabel) {
-        this.lastAcceptedInputLabel = normalizedLabel;
+      const didStableInputChange = normalizedLabel !== this.stableInputLabel;
+      if (didStableInputChange) {
+        this.stableInputLabel = normalizedLabel;
+      }
+
+      if (didStableInputChange && normalizedLabel !== this.lastEmittedInputLabel) {
+        this.lastEmittedInputLabel = normalizedLabel;
         this.pendingInputVector = this.mapInputLabelToVector(normalizedLabel);
       }
     }
