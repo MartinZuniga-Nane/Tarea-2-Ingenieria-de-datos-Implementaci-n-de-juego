@@ -1,0 +1,67 @@
+export const gravityWeaverLevels = [
+  {
+    id: "gw-01-tutorial",
+    title: "Orbita de Inicio",
+    hint: "Recorre el laberinto por los pasillos centrales.",
+    difficulty: "Tutorial",
+    parTimeMs: 26000,
+    spawn: { x: 52, y: 344 },
+    portal: { x: 1200, y: 314, width: 64, height: 64 },
+    orbs: [
+      { x: 360, y: 380, radius: 16 },
+      { x: 1040, y: 320, radius: 16 },
+    ],
+    obstacles: [
+      { x: 90, y: 0, width: 30, height: 240 },
+      { x: 90, y: 450, width: 30, height: 270 },
+      { x: 380, y: 0, width: 30, height: 280 },
+      { x: 565, y: 520, width: 30, height: 200 },
+      { x: 710, y: 0, width: 30, height: 150 },
+      { x: 865, y: 370, width: 30, height: 250 },            
+      { x: 1160, y: 0, width: 30, height: 250 },
+      { x: 1160, y: 440, width: 30, height: 280 },
+    ],
+  },
+  {
+    id: "gw-02-precision",
+    title: "Angulos de Precision",
+    hint: "Usa cambios cortos de gravedad para encadenar giros.",
+    difficulty: "Intermedio",
+    parTimeMs: 32000,
+    spawn: { x: 52, y: 620 },
+    portal: { x: 1200, y: 240, width: 64, height: 64 },
+    orbs: [
+      { x: 405, y: 580, radius: 16 },
+      { x: 1040, y: 310, radius: 16 },
+    ],
+    obstacles: [
+      { x: 180, y: 490, width: 30, height: 230 },
+      { x: 0, y: 210, width: 850, height: 30 },
+      { x: 405, y: 235, width: 30, height: 250 },
+      { x: 620, y: 500, width: 30, height: 270 },
+      { x: 850, y: 210, width: 30, height: 290 },
+      { x: 1100, y: 0, width: 30, height: 100 },
+      { x: 1100, y: 380, width: 30, height: 340 },
+    ],
+  },
+  {
+    id: "gw-03-rebounds",
+    title: "Rebote Controlado",
+    hint: "Aprovecha los rebotes en columnas delgadas para cambiar de carril.",
+    difficulty: "Intermedio",
+    parTimeMs: 30000,
+    spawn: { x: 56, y: 620 },
+    portal: { x: 1100, y: 86, width: 60, height: 60 },
+    orbs: [
+      { x: 900, y: 580, radius: 16 },
+      { x: 200, y: 120, radius: 16 },
+    ],
+    obstacles: [
+
+      { x: 0, y: 205, width: 100, height: 30 },
+      { x: 300, y: 205, width: 690, height: 30 },
+      { x: 0, y: 450, width: 760, height: 30 },      
+      { x: 990, y: 205, width: 30, height: 540 },
+    ],
+  },
+];

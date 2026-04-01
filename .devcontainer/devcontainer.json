@@ -1,0 +1,31 @@
+{
+  "name": "Arcade Library Dev",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "forwardPorts": [8080, 5500],
+  "portsAttributes": {
+    "8080": {
+      "label": "Static Server",
+      "onAutoForward": "notify"
+    },
+    "5500": {
+      "label": "Live Server",
+      "onAutoForward": "notify"
+    }
+  },
+  "postCreateCommand": "python3 -m pip --version",
+  "postStartCommand": "npm install -g serve@14.2.6",
+  "remoteUser": "node",
+  "shutdownAction": "stopContainer",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ritwickdey.LiveServer",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

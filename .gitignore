@@ -1,0 +1,33 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Dependencies
+node_modules/
+
+# Local environment files
+.env
+.env.*
+
+# Local agent instructions
+AGENTS.md
+AGENTS.MD
+
+# Gravity Weaver model artifacts and local docs
+assets/games/gravityWeaver/modelo/
+GRAVITY_WEAVER_MODELO.md
+GRAVITY_WEAVER_LAYOUT_LOCAL.md
+
+# Project docs generated for delivery
+JUEGOS_Y_METODOS.md
+
+# CI workflow (local placeholder)
+.github/workflows/ci.yml
