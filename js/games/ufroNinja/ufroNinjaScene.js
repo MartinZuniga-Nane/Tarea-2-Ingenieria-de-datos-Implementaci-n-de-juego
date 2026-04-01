@@ -191,7 +191,7 @@ export class UfroNinjaScene {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Ufro Ninja...</div>
-            <div class="pill">Ataque = cortar | Reposo = preparar | Enter = iniciar/reiniciar | Esc = launcher</div>
+            <div class="pill">Ataque = Mano abierta| Reposo = Mano cerrada/puño | Enter = iniciar/reiniciar | Esc = launcher</div>
           </div>
           <aside class="game-shell__debug" data-role="debug-panel">
             <h3>Ufro Ninja</h3>

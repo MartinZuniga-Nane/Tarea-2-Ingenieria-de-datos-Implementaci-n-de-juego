@@ -156,7 +156,7 @@ export class UfroJumpScene {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Ufro Jump...</div>
-            <div class="pill">Modelo TM: Izquierda, Derecha, Reposo, Reposo2, Fondo | Esc = launcher</div>
+            <div class="pill">Izquierda: Signo de Paz, Derecha: Mano abierta | Esc = launcher</div>
           </div>
           <aside class="game-shell__debug" data-role="debug-panel">
             <h3>Ufro Jump</h3>
