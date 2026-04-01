@@ -149,6 +149,29 @@
   pointer-events: auto;
 }
 
+.ufrobasket-shell .game-shell__tm-panel {
+  left: 1rem;
+  right: auto;
+}
+
+.ufrobasket-shell .game-sidebar {
+  left: auto;
+  right: 0.9rem;
+}
+
+.ufrobasket-shell .game-sidebar__panel {
+  left: auto;
+  right: calc(100% + 0.6rem);
+}
+
+.ufrobasket-shell .pill {
+  text-shadow:
+    -1px -1px 0 rgba(9, 16, 28, 0.9),
+    1px -1px 0 rgba(9, 16, 28, 0.9),
+    -1px 1px 0 rgba(9, 16, 28, 0.9),
+    1px 1px 0 rgba(9, 16, 28, 0.9);
+}
+
 .game-shell__tm-title {
   margin-bottom: 0.65rem;
   font-family: "Space Grotesk", sans-serif;
