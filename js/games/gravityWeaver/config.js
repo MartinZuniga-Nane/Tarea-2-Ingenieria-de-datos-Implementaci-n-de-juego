@@ -4,15 +4,29 @@ export const gravityWeaverConfig = {
     height: 720,
     minHeight: 540,
   },
-  ml: {
-    teachableModelUrl: "https://teachablemachine.withgoogle.com/models/TU_MODELO/",
-    classifyIntervalMs: 90,
+  model: {
+    path: "https://teachablemachine.withgoogle.com/models/BR6g4qGy7/model.json",
+    metadataPath: "https://teachablemachine.withgoogle.com/models/BR6g4qGy7/metadata.json",
+    classifyIntervalMs: 140,
+    loadTimeoutMs: 12000,
+  },
+  input: {
+    expectedLabels: ["izquierda", "derecha", "arriba", "abajo", "neutral"],
+    minConfidence: 0.6,
+    persistenceMs: 320,
+    labelToVector: {
+      izquierda: { x: -1, y: 0 },
+      derecha: { x: 1, y: 0 },
+      arriba: { x: 0, y: -1 },
+      abajo: { x: 0, y: 1 },
+      neutral: { x: 0, y: 0 },
+    },
   },
   score: {
-    baseLevelScore: 1000,
-    timePenaltyPerSecond: 4,
-    collisionPenaltyEach: 30,
-    orbBonusEach: 500,
+    baseLevelScore: 10000,
+    timePenaltyPerSecond: 5,
+    collisionPenaltyEach: 10,
+    orbBonusEach: 1000,
     leaderboardSize: 10,
     storageKey: "gravityWeaverLeaderboardV1",
   },
@@ -77,11 +91,11 @@ export const gravityWeaverConfig = {
     },
   },
   physics: {
-    gravityForce: 1180,
-    gravityLerp: 0.12,
-    friction: 0.986,
-    maxSpeed: 740,
-    elasticity: 0.72,
+    gravityForce: 560,
+    gravityLerp: 0.04,
+    friction: 0.990,
+    maxSpeed: 420,
+    elasticity: 0.66,
   },
   astronaut: {
     radius: 18,
@@ -111,14 +125,5 @@ export const gravityWeaverConfig = {
     textColor: "#ebf2ff",
     textSoftColor: "#aebad9",
     warningColor: "#ffd48a",
-  },
-  input: {
-    labelsToVectors: {
-      arriba: { x: 0, y: -1 },
-      abajo: { x: 0, y: 1 },
-      izquierda: { x: -1, y: 0 },
-      derecha: { x: 1, y: 0 },
-      neutral: { x: 0, y: 0 },
-    },
   },
 };

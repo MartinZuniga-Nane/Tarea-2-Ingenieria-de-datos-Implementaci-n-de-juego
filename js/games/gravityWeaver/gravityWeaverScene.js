@@ -7,18 +7,55 @@ import { LevelManager } from "./levelManager.js";
 import { loadLeaderboard, pushLeaderboardEntry } from "./scoreboard.js";
 import { gravityWeaverLevels } from "./levels.js";
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
 function normalizeLabel(rawLabel) {
   if (!rawLabel) {
-    return "neutral";
+    return "";
   }
 
-  return String(rawLabel)
-    .trim()
-    .toLowerCase();
+  return String(rawLabel).trim().toLowerCase();
+}
+
+function resolveDrawableVideoSource(videoLike) {
+  if (!videoLike) {
+    return null;
+  }
+
+  return videoLike.elt || videoLike;
+}
+
+function isFinitePositive(value) {
+  return Number.isFinite(value) && value > 0;
+}
+
+function normalizeClassificationResults(payload) {
+  if (!payload) {
+    return [];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload.results)) {
+    return payload.results;
+  }
+
+  if (typeof payload === "object") {
+    const label = payload.label ?? payload.className ?? payload.class;
+    const confidence = payload.confidence ?? payload.probability ?? payload.score;
+    if (typeof label === "string") {
+      return [{
+        label,
+        confidence: Number.isFinite(confidence) ? confidence : 0,
+      }];
+    }
+  }
+
+  return [];
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 function formatMs(milliseconds) {
@@ -50,6 +87,7 @@ export class GravityWeaverScene {
 
     this.levels = gravityWeaverLevels;
     this.levelIndex = 0;
+    this.pendingStartLevelIndex = 0;
     this.levelStartedAt = 0;
     this.levelFinishedAt = 0;
 
@@ -74,7 +112,6 @@ export class GravityWeaverScene {
 
     this.currentGravity = { x: 0, y: 0 };
     this.targetGravity = { x: 0, y: 0 };
-    this.predictedVector = { x: 0, y: 0 };
     this.currentLabel = "Neutral";
     this.inputSource = "keyboard";
 
@@ -135,11 +172,27 @@ export class GravityWeaverScene {
     this.handleKeyUp = this.handleKeyUp.bind(this);
     this.handleAliasSubmit = this.handleAliasSubmit.bind(this);
     this.handleAliasKeyDown = this.handleAliasKeyDown.bind(this);
+    this.handleMenuPlay = this.handleMenuPlay.bind(this);
+    this.handleMenuLevelSelect = this.handleMenuLevelSelect.bind(this);
+    this.handleLevelOptionClick = this.handleLevelOptionClick.bind(this);
+    this.handleLevelSelectBack = this.handleLevelSelectBack.bind(this);
+    this.handleMenuControls = this.handleMenuControls.bind(this);
+    this.handleControlsBack = this.handleControlsBack.bind(this);
 
-    this.video = null;
     this.classifier = null;
-    this.cameraStream = null;
     this.classifyTimeoutId = null;
+    this.modelMetadata = null;
+    this.modelLabelSet = null;
+    this.lastRawLabel = "neutral";
+    this.lastRawConfidence = 0;
+    this.stableInputLabel = "neutral";
+    this.candidateInputLabel = "neutral";
+    this.candidateInputSince = 0;
+    this.lastEmittedInputLabel = "neutral";
+    this.pendingInputVector = null;
+    this.flipCanvas = null;
+    this.flipContext = null;
+    this.video = null;
     this.destroyed = false;
     this.modal = null;
     this.gameSidebar = null;
@@ -152,14 +205,14 @@ export class GravityWeaverScene {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Gravity Weaver...</div>
-            <div class="pill">Flechas = gravedad | R = reiniciar nivel | Esc = launcher</div>
+            <div class="pill">Flechas o gestos ML = gravedad | R = reiniciar nivel | Esc = launcher</div>
           </div>
           <aside class="game-shell__debug" data-role="debug-panel">
             <h3>Gravity Weaver</h3>
             <dl>
               <dt>Nivel</dt><dd data-role="level-name">-</dd>
               <dt>Entrada</dt><dd data-role="input-source">-</dd>
-              <dt>Etiqueta ML</dt><dd data-role="ml-label">-</dd>
+              <dt>Gesto</dt><dd data-role="ml-label">-</dd>
               <dt>Animacion</dt><dd data-role="anim-state">-</dd>
               <dt>Boost</dt><dd data-role="boost-weight">0.00</dd>
               <dt>Alias</dt><dd data-role="player-alias">-</dd>
@@ -173,11 +226,41 @@ export class GravityWeaverScene {
               <dt>Par</dt><dd data-role="par-time">00:00</dd>
               <dt>Rebotes</dt><dd data-role="collision-count">0</dd>
               <dt>Intentos</dt><dd data-role="attempt-count">1</dd>
-              <dt>Estado ML</dt><dd data-role="ml-state">-</dd>
+              <dt>Estado camara</dt><dd data-role="ml-state">-</dd>
             </dl>
           </aside>
-          <aside class="game-shell__camera hidden" data-role="camera-panel"></aside>
-          <section data-role="alias-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+          <aside class="game-shell__camera hidden" data-role="camera-panel">
+            <div class="game-shell__camera-input" data-role="camera-input-overlay">Input: - | Conf: -</div>
+          </aside>
+          <section data-role="menu-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+            <div style="width:min(520px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:12px;pointer-events:auto;">
+              <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Gravity Weaver</h3>
+              <p style="margin:0;color:#aebad9;">Selecciona una opcion para comenzar.</p>
+              <button data-role="menu-play" type="button" style="padding:10px 14px;border:none;border-radius:10px;background:#5f92ff;color:#f2f7ff;font-weight:600;cursor:pointer;">Jugar</button>
+              <button data-role="menu-level-select" type="button" style="padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Selector de nivel</button>
+              <button data-role="menu-controls" type="button" style="padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Controles</button>
+            </div>
+          </section>
+          <section data-role="level-select-overlay" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+            <div style="width:min(560px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:10px;pointer-events:auto;">
+              <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Selector de nivel</h3>
+              <p style="margin:0;color:#aebad9;">Elige el nivel de inicio de la campana.</p>
+              <div data-role="level-select-list" style="display:grid;gap:8px;"></div>
+              <button data-role="level-select-back" type="button" style="margin-top:6px;padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Volver</button>
+            </div>
+          </section>
+          <section data-role="controls-overlay" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+            <div style="width:min(560px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:10px;pointer-events:auto;">
+              <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Controles</h3>
+              <p style="margin:0;color:#aebad9;">Teclado: flechas para mover gravedad, R para reiniciar, Esc para salir.</p>
+              <p style="margin:0;color:#aebad9;">Izquierda: Apuntar con el indice a la izquierda.</p>
+              <p style="margin:0;color:#aebad9;">Derecha: Apuntar con el indice a la derecha.</p>
+              <p style="margin:0;color:#aebad9;">Arriba: La palma de la mano hacia adelante con los dedos apuntando hacia arriba.</p>
+              <p style="margin:0;color:#aebad9;">Abajo: Apuntar con todos los dedos para abajo.</p>
+              <button data-role="controls-back" type="button" style="margin-top:6px;padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Volver</button>
+            </div>
+          </section>
+          <section data-role="alias-overlay" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
             <form data-role="alias-form" style="width:min(520px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:12px;pointer-events:auto;">
               <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Ingresa tu alias</h3>
               <p style="margin:0;color:#aebad9;">Se usara para registrar tu score al finalizar la campana.</p>
@@ -196,6 +279,16 @@ export class GravityWeaverScene {
     this.topbar = this.root.querySelector(".game-shell__topbar");
     this.debugPanel = this.root.querySelector('[data-role="debug-panel"]');
     this.cameraPanel = this.root.querySelector('[data-role="camera-panel"]');
+    this.cameraInputOverlay = this.root.querySelector('[data-role="camera-input-overlay"]');
+    this.menuOverlay = this.root.querySelector('[data-role="menu-overlay"]');
+    this.controlsOverlay = this.root.querySelector('[data-role="controls-overlay"]');
+    this.levelSelectOverlay = this.root.querySelector('[data-role="level-select-overlay"]');
+    this.levelSelectList = this.root.querySelector('[data-role="level-select-list"]');
+    this.menuPlayButton = this.root.querySelector('[data-role="menu-play"]');
+    this.menuLevelSelectButton = this.root.querySelector('[data-role="menu-level-select"]');
+    this.menuControlsButton = this.root.querySelector('[data-role="menu-controls"]');
+    this.levelSelectBackButton = this.root.querySelector('[data-role="level-select-back"]');
+    this.controlsBackButton = this.root.querySelector('[data-role="controls-back"]');
     this.aliasOverlay = this.root.querySelector('[data-role="alias-overlay"]');
     this.aliasForm = this.root.querySelector('[data-role="alias-form"]');
     this.aliasInput = this.root.querySelector('[data-role="alias-input"]');
@@ -209,6 +302,13 @@ export class GravityWeaverScene {
     this.topbar?.classList.add("hidden");
     this.debugPanel?.classList.add("hidden");
     this.cameraPanel?.classList.add("hidden");
+    this.renderLevelSelectList();
+    this.menuPlayButton?.addEventListener("click", this.handleMenuPlay);
+    this.menuLevelSelectButton?.addEventListener("click", this.handleMenuLevelSelect);
+    this.menuControlsButton?.addEventListener("click", this.handleMenuControls);
+    this.levelSelectList?.addEventListener("click", this.handleLevelOptionClick);
+    this.levelSelectBackButton?.addEventListener("click", this.handleLevelSelectBack);
+    this.controlsBackButton?.addEventListener("click", this.handleControlsBack);
     this.aliasForm?.addEventListener("submit", this.handleAliasSubmit);
     this.aliasInput?.addEventListener("keydown", this.handleAliasKeyDown);
 
@@ -244,12 +344,11 @@ export class GravityWeaverScene {
 
     this.setupKeyboardListeners();
     this.generateStars();
-    this.state = "awaiting-alias";
-    this.statusPill.textContent = "Ingresa tu alias para comenzar";
+    this.state = "menu";
+    this.statusPill.textContent = "Selecciona una opcion para comenzar";
 
     this.sketch = new window.p5(this.createSketch());
-    this.initializeMachineLearning();
-    this.aliasInput?.focus();
+    this.initializeClassifier();
   }
 
   createSketch() {
@@ -318,8 +417,84 @@ export class GravityWeaverScene {
       this.aliasError.textContent = "";
     }
     this.aliasOverlay?.classList.add("hidden");
-    this.resetCampaignProgress();
+    this.resetCampaignProgress(this.pendingStartLevelIndex);
     this.enter();
+  }
+
+  handleMenuPlay() {
+    this.pendingStartLevelIndex = 0;
+    this.menuOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.controlsOverlay?.classList.add("hidden");
+    this.aliasOverlay?.classList.remove("hidden");
+    this.state = "awaiting-alias";
+    this.statusPill.textContent = "Ingresa tu alias para comenzar";
+    this.aliasInput?.focus();
+  }
+
+  handleMenuLevelSelect() {
+    this.menuOverlay?.classList.add("hidden");
+    this.controlsOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.remove("hidden");
+    this.state = "menu-level-select";
+    this.statusPill.textContent = "Selecciona un nivel de inicio";
+  }
+
+  handleLevelOptionClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const button = target.closest('[data-level-index]');
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+
+    const parsed = Number(button.dataset.levelIndex);
+    if (!Number.isInteger(parsed)) {
+      return;
+    }
+
+    this.pendingStartLevelIndex = clamp(parsed, 0, this.levels.length - 1);
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.aliasOverlay?.classList.remove("hidden");
+    this.state = "awaiting-alias";
+    this.statusPill.textContent = `Ingresa tu alias para iniciar en Nivel ${this.pendingStartLevelIndex + 1}`;
+    this.aliasInput?.focus();
+  }
+
+  handleLevelSelectBack() {
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.menuOverlay?.classList.remove("hidden");
+    this.state = "menu";
+    this.statusPill.textContent = "Selecciona una opcion para comenzar";
+  }
+
+  handleMenuControls() {
+    this.menuOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.controlsOverlay?.classList.remove("hidden");
+    this.state = "menu-controls";
+    this.statusPill.textContent = "Revisa los controles";
+  }
+
+  handleControlsBack() {
+    this.controlsOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.menuOverlay?.classList.remove("hidden");
+    this.state = "menu";
+    this.statusPill.textContent = "Selecciona una opcion para comenzar";
+  }
+
+  renderLevelSelectList() {
+    if (!this.levelSelectList) {
+      return;
+    }
+
+    this.levelSelectList.innerHTML = this.levels.map((level, index) => (
+      `<button data-level-index="${index}" type="button" style="padding:10px 12px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;text-align:left;">Nivel ${index + 1}: ${level.title}</button>`
+    )).join("");
   }
 
   handleAliasKeyDown(event) {
@@ -331,8 +506,8 @@ export class GravityWeaverScene {
     this.aliasForm?.requestSubmit();
   }
 
-  resetCampaignProgress() {
-    this.levelIndex = 0;
+  resetCampaignProgress(startLevelIndex = 0) {
+    this.levelIndex = clamp(startLevelIndex, 0, this.levels.length - 1);
     this.metrics.attempts = 1;
     this.score.campaignTotal = 0;
     this.score.levelCurrent = 0;
@@ -370,6 +545,7 @@ export class GravityWeaverScene {
     this.currentGravity.y = 0;
     this.targetGravity.x = 0;
     this.targetGravity.y = 0;
+    this.pendingInputVector = null;
 
     this.animation.state = "idle";
     this.animation.baseState = "idle";
@@ -393,7 +569,7 @@ export class GravityWeaverScene {
       return;
     }
 
-    if (this.state === "awaiting-alias") {
+    if (this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       this.updateDebugPanel();
       return;
     }
@@ -410,9 +586,12 @@ export class GravityWeaverScene {
       this.targetGravity.y = keyboardVector.y;
       this.currentLabel = "Teclado";
     } else {
-      this.inputSource = this.mlState === "ready" ? "ml5 + Teachable Machine" : "keyboard";
-      this.targetGravity.x = this.predictedVector.x;
-      this.targetGravity.y = this.predictedVector.y;
+      this.inputSource = this.mlState === "ready" ? "ml5 + imageClassifier" : "keyboard";
+      const classifierVector = this.consumeClassifierVector();
+      if (classifierVector) {
+        this.targetGravity.x = classifierVector.x;
+        this.targetGravity.y = classifierVector.y;
+      }
     }
 
     const deltaX = this.targetGravity.x - this.currentGravity.x;
@@ -891,30 +1070,66 @@ export class GravityWeaverScene {
   }
 
   exit() {
-    this.clearClassifierTimer();
+    this.targetGravity.x = 0;
+    this.targetGravity.y = 0;
   }
 
-  async initializeMachineLearning() {
+  async initializeClassifier() {
     try {
       this.mlState = "requesting-camera";
+      await this.loadModelMetadata();
       this.video = await this.createVideoElement();
-      this.cameraPanel.appendChild(this.video);
-
       this.mlState = "loading-model";
-      this.classifier = await this.createImageClassifier();
+
+      if (this.video) {
+        this.cameraPanel.classList.remove("hidden");
+        this.cameraPanel.appendChild(this.video);
+      }
+
+      this.classifier = await this.createClassifier();
       this.mlState = "ready";
+      this.currentLabel = "Neutral";
+      this.stableInputLabel = "neutral";
+      this.candidateInputLabel = "neutral";
+      this.candidateInputSince = performance.now();
+      this.lastEmittedInputLabel = "neutral";
+      this.pendingInputVector = null;
       this.scheduleClassification(0);
     } catch (error) {
       this.mlState = "fallback";
-      this.predictedVector = { x: 0, y: 0 };
       this.currentLabel = "Neutral";
+      this.clearClassificationTimer();
+      this.stopVideoStream();
       this.modal.show({
-        title: "Modelo o camara no disponibles",
+        title: "Clasificador o camara no disponibles",
         message: "Gravity Weaver seguira con control de teclado (flechas).",
         dismissLabel: "Continuar",
         autoHideMs: 2600,
       });
-      console.warn("Gravity Weaver fallback activo:", error?.message ?? error);
+      console.warn("Gravity Weaver fallback activo (sin clasificador):", error?.message ?? error);
+    }
+  }
+
+  async loadModelMetadata() {
+    const metadataPath = this.config.model.metadataPath;
+    if (!metadataPath) {
+      return;
+    }
+
+    try {
+      const response = await fetch(metadataPath, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`No se pudo leer metadata (${response.status})`);
+      }
+
+      const metadata = await response.json();
+      const labels = Array.isArray(metadata?.labels) ? metadata.labels : [];
+      this.modelMetadata = metadata;
+      this.modelLabelSet = new Set(labels.map((label) => normalizeLabel(label)));
+    } catch (error) {
+      this.modelMetadata = null;
+      this.modelLabelSet = null;
+      console.warn("Gravity Weaver no pudo cargar metadata del modelo:", error?.message ?? error);
     }
   }
 
@@ -929,12 +1144,12 @@ export class GravityWeaverScene {
     video.setAttribute("autoplay", "true");
     video.muted = true;
 
-    this.cameraStream = await navigator.mediaDevices.getUserMedia({
+    const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 640, height: 480, facingMode: "user" },
       audio: false,
     });
 
-    video.srcObject = this.cameraStream;
+    video.srcObject = stream;
     await new Promise((resolve) => {
       video.onloadedmetadata = () => {
         video.play().catch(() => {});
@@ -945,82 +1160,70 @@ export class GravityWeaverScene {
     return video;
   }
 
-  async createImageClassifier() {
+  async createClassifier() {
     if (!window.ml5?.imageClassifier) {
       throw new Error("ml5.imageClassifier no esta disponible");
     }
 
-    const modelUrl = this.config.ml.teachableModelUrl;
-    let classifier = null;
+    const modelPath = new URL(this.config.model.path, window.location.href).href;
 
-    const withVideo = await this.tryCreateClassifier(modelUrl, this.video);
-    if (withVideo) {
-      classifier = withVideo;
-    } else {
-      const withoutVideo = await this.tryCreateClassifier(modelUrl, null);
-      classifier = withoutVideo;
-    }
+    const classifier = await new Promise((resolve, reject) => {
+      let settled = false;
+      let classifierInstance = null;
+      const timeoutMs = this.config.model.loadTimeoutMs ?? 12000;
+      const timeoutId = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(new Error("El clasificador tardo demasiado en cargar"));
+      }, timeoutMs);
 
-    if (!classifier) {
-      throw new Error("No fue posible cargar el clasificador de Teachable Machine");
+      const finish = (instance) => {
+        if (settled || !instance) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeoutId);
+        resolve(instance);
+      };
+
+      const fail = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeoutId);
+        reject(error);
+      };
+
+      try {
+        classifierInstance = window.ml5.imageClassifier(modelPath, () => finish(classifierInstance));
+        if (classifierInstance && typeof classifierInstance.then === "function") {
+          classifierInstance.then((resolved) => finish(resolved)).catch(fail);
+        }
+      } catch (error) {
+        fail(error);
+      }
+    });
+
+    if (typeof classifier.classify !== "function") {
+      throw new Error("El clasificador no expone el metodo classify");
     }
 
     return classifier;
   }
 
-  async tryCreateClassifier(modelUrl, video) {
-    try {
-      return await new Promise((resolve, reject) => {
-        let settled = false;
-        let instance = null;
-
-        const complete = (value) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          resolve(value);
-        };
-
-        const fail = (error) => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          reject(error);
-        };
-
-        try {
-          if (video) {
-            instance = window.ml5.imageClassifier(modelUrl, video, () => complete(instance));
-          } else {
-            instance = window.ml5.imageClassifier(modelUrl, () => complete(instance));
-          }
-
-          if (instance && typeof instance.then === "function") {
-            instance.then((resolved) => complete(resolved)).catch(fail);
-            return;
-          }
-
-          window.setTimeout(() => complete(instance), 70);
-        } catch (error) {
-          fail(error);
-        }
-      });
-    } catch (error) {
-      return null;
-    }
-  }
-
-  scheduleClassification(delayMs = this.config.ml.classifyIntervalMs) {
-    this.clearClassifierTimer();
-    if (this.destroyed || this.mlState !== "ready" || !this.classifier) {
+  scheduleClassification(delayMs = this.config.model.classifyIntervalMs) {
+    this.clearClassificationTimer();
+    if (this.destroyed || !this.classifier || !this.video) {
       return;
     }
+
     this.classifyTimeoutId = window.setTimeout(() => this.classifyFrame(), delayMs);
   }
 
-  clearClassifierTimer() {
+  clearClassificationTimer() {
     if (this.classifyTimeoutId) {
       window.clearTimeout(this.classifyTimeoutId);
       this.classifyTimeoutId = null;
@@ -1028,48 +1231,191 @@ export class GravityWeaverScene {
   }
 
   classifyFrame() {
-    if (this.destroyed || this.mlState !== "ready" || !this.classifier || !this.video) {
+    if (this.destroyed || !this.classifier || !this.video) {
       return;
     }
 
-    const finalize = (error, results) => {
+    const handleResults = (error, results) => {
       if (error) {
-        this.mlState = "fallback";
-        console.warn("Gravity Weaver classification error:", error?.message ?? error);
+        console.warn("Gravity Weaver classifier error:", error?.message ?? error);
+        this.scheduleClassification(260);
         return;
       }
 
-      this.ingestClassificationResults(results);
+      this.ingestClassification(normalizeClassificationResults(results));
       this.scheduleClassification();
     };
 
     try {
+      const source = this.buildMirroredFrameSource();
+      if (!source) {
+        this.scheduleClassification(120);
+        return;
+      }
+
       if (this.classifier.classify.length >= 2) {
-        this.classifier.classify(this.video, (arg1, arg2) => {
-          const hasArrayFirst = Array.isArray(arg1);
-          const hasArraySecond = Array.isArray(arg2);
-          const results = hasArrayFirst ? arg1 : (hasArraySecond ? arg2 : []);
-          const error = (arg1 instanceof Error) ? arg1 : ((arg2 instanceof Error) ? arg2 : null);
-          finalize(error, results);
+        this.classifier.classify(source, (arg1, arg2) => {
+          const resultsCandidate = arg1 instanceof Error ? arg2 : arg1;
+          const fallbackCandidate = arg2 instanceof Error ? arg1 : arg2;
+          const normalizedPrimary = normalizeClassificationResults(resultsCandidate);
+          const normalizedFallback = normalizeClassificationResults(fallbackCandidate);
+          const finalResults = normalizedPrimary.length > 0 ? normalizedPrimary : normalizedFallback;
+          const error = arg1 instanceof Error ? arg1 : (arg2 instanceof Error ? arg2 : null);
+          handleResults(error, finalResults);
         });
         return;
       }
 
-      Promise.resolve(this.classifier.classify(this.video))
-        .then((results) => finalize(null, results))
-        .catch((error) => finalize(error, []));
+      Promise.resolve(this.classifier.classify(source))
+        .then((results) => handleResults(null, results))
+        .catch((error) => handleResults(error, []));
     } catch (error) {
-      finalize(error, []);
+      handleResults(error, []);
     }
   }
 
-  ingestClassificationResults(results) {
+  buildMirroredFrameSource() {
+    const videoElement = resolveDrawableVideoSource(this.video);
+    const isHtmlVideo = typeof HTMLVideoElement !== "undefined" && videoElement instanceof HTMLVideoElement;
+    if (!isHtmlVideo) {
+      return null;
+    }
+
+    if (!isFinitePositive(videoElement.videoWidth) || !isFinitePositive(videoElement.videoHeight)) {
+      return null;
+    }
+
+    if (!this.flipCanvas) {
+      this.flipCanvas = document.createElement("canvas");
+      this.flipContext = this.flipCanvas.getContext("2d", { willReadFrequently: false });
+    }
+
+    const targetWidth = videoElement.videoWidth;
+    const targetHeight = videoElement.videoHeight;
+    if (this.flipCanvas.width !== targetWidth || this.flipCanvas.height !== targetHeight) {
+      this.flipCanvas.width = targetWidth;
+      this.flipCanvas.height = targetHeight;
+    }
+
+    if (!this.flipContext) {
+      return null;
+    }
+
+    this.flipContext.save();
+    this.flipContext.clearRect(0, 0, targetWidth, targetHeight);
+    this.flipContext.translate(targetWidth, 0);
+    this.flipContext.scale(-1, 1);
+    this.flipContext.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
+    this.flipContext.restore();
+    return this.flipCanvas;
+  }
+
+  ingestClassification(results) {
+    const now = performance.now();
     const topResult = Array.isArray(results) ? results[0] : null;
-    const normalized = normalizeLabel(topResult?.label);
-    const mapped = this.config.input.labelsToVectors[normalized] ?? this.config.input.labelsToVectors.neutral;
-    this.currentLabel = topResult?.label ?? "Neutral";
-    this.predictedVector.x = mapped.x;
-    this.predictedVector.y = mapped.y;
+    const rawLabel = topResult?.label ?? "neutral";
+    const normalizedLabel = normalizeLabel(rawLabel);
+    const rawConfidence = topResult?.confidence ?? 0;
+
+    this.lastRawLabel = rawLabel;
+    this.lastRawConfidence = rawConfidence;
+
+    if (!this.isKnownModelLabel(normalizedLabel)) {
+      this.currentLabel = `No mapeado: ${rawLabel}`;
+      return;
+    }
+
+    if (normalizedLabel !== this.candidateInputLabel) {
+      this.candidateInputLabel = normalizedLabel;
+      this.candidateInputSince = now;
+    }
+
+    const minConfidence = this.config.input.minConfidence ?? 0.6;
+    if (rawConfidence < minConfidence) {
+      this.currentLabel = `Ruido (${rawLabel})`;
+      return;
+    }
+
+    const persistenceMs = this.config.input.persistenceMs ?? 220;
+    if (now - this.candidateInputSince >= persistenceMs) {
+      const didStableInputChange = normalizedLabel !== this.stableInputLabel;
+      if (didStableInputChange) {
+        this.stableInputLabel = normalizedLabel;
+      }
+
+      if (didStableInputChange && normalizedLabel !== this.lastEmittedInputLabel) {
+        this.lastEmittedInputLabel = normalizedLabel;
+        this.pendingInputVector = this.mapInputLabelToVector(normalizedLabel);
+      }
+    }
+
+    this.currentLabel = this.formatInputLabel(this.stableInputLabel);
+  }
+
+  isKnownModelLabel(normalizedLabel) {
+    if (!normalizedLabel) {
+      return false;
+    }
+
+    if (this.modelLabelSet?.size) {
+      return this.modelLabelSet.has(normalizedLabel);
+    }
+
+    const fallbackExpected = this.config.input.expectedLabels ?? [];
+    return fallbackExpected.includes(normalizedLabel);
+  }
+
+  formatInputLabel(label) {
+    const normalized = normalizeLabel(label);
+    if (!normalized || normalized === "neutral") {
+      return "Neutral";
+    }
+
+    if (normalized === "izquierda") {
+      return "Izquierda";
+    }
+    if (normalized === "derecha") {
+      return "Derecha";
+    }
+    if (normalized === "arriba") {
+      return "Arriba";
+    }
+    if (normalized === "abajo") {
+      return "Abajo";
+    }
+
+    return String(label);
+  }
+
+  mapInputLabelToVector(label) {
+    const map = this.config.input.labelToVector ?? {};
+    const neutralVector = map.neutral ?? { x: 0, y: 0 };
+    const mappedVector = map[label] ?? neutralVector;
+    return {
+      x: mappedVector.x ?? 0,
+      y: mappedVector.y ?? 0,
+    };
+  }
+
+  consumeClassifierVector() {
+    if (this.mlState !== "ready") {
+      return this.mapInputLabelToVector("neutral");
+    }
+
+    if (!this.pendingInputVector) {
+      return null;
+    }
+
+    const vector = this.pendingInputVector;
+    this.pendingInputVector = null;
+    return vector;
+  }
+
+  stopVideoStream() {
+    const tracks = this.video?.srcObject?.getTracks?.() ?? [];
+    tracks.forEach((track) => track.stop());
+    this.video?.remove();
+    this.video = null;
   }
 
   getKeyboardVector() {
@@ -1109,7 +1455,25 @@ export class GravityWeaverScene {
       return;
     }
 
-    if (!this.aliasConfirmed || this.state === "awaiting-alias") {
+    if (this.state === "menu" && event.code === "Enter") {
+      event.preventDefault();
+      this.handleMenuPlay();
+      return;
+    }
+
+    if (this.state === "menu-level-select" && event.code === "Enter") {
+      event.preventDefault();
+      this.handleLevelSelectBack();
+      return;
+    }
+
+    if (this.state === "menu-controls" && event.code === "Enter") {
+      event.preventDefault();
+      this.handleControlsBack();
+      return;
+    }
+
+    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       return;
     }
 
@@ -1134,7 +1498,7 @@ export class GravityWeaverScene {
   }
 
   handleKeyUp(event) {
-    if (!this.aliasConfirmed || this.state === "awaiting-alias") {
+    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       return;
     }
 
@@ -1167,6 +1531,21 @@ export class GravityWeaverScene {
   }
 
   updateStatusText() {
+    if (this.state === "menu-controls") {
+      this.statusPill.textContent = "Revisa los controles";
+      return;
+    }
+
+    if (this.state === "menu-level-select") {
+      this.statusPill.textContent = "Selecciona un nivel de inicio";
+      return;
+    }
+
+    if (this.state === "menu") {
+      this.statusPill.textContent = "Selecciona una opcion para comenzar";
+      return;
+    }
+
     if (this.state === "awaiting-alias") {
       this.statusPill.textContent = "Ingresa tu alias para comenzar";
       return;
@@ -1198,6 +1577,14 @@ export class GravityWeaverScene {
     this.root.querySelector('[data-role="collision-count"]').textContent = String(this.metrics.collisions);
     this.root.querySelector('[data-role="attempt-count"]').textContent = String(this.metrics.attempts);
     this.root.querySelector('[data-role="ml-state"]').textContent = this.mlState;
+
+    const cameraInputText = this.currentLabel || "-";
+    const cameraConfidenceText = this.mlState === "ready"
+      ? `${Math.max(0, this.lastRawConfidence * 100).toFixed(1)}%`
+      : "-";
+    if (this.cameraInputOverlay) {
+      this.cameraInputOverlay.textContent = `Input: ${cameraInputText} | Conf: ${cameraConfidenceText}`;
+    }
   }
 
   handleRuntimeError(error) {
@@ -1214,16 +1601,22 @@ export class GravityWeaverScene {
   destroy() {
     this.destroyed = true;
     this.exit();
+    this.clearClassificationTimer();
     this.teardownKeyboardListeners();
+    this.menuPlayButton?.removeEventListener("click", this.handleMenuPlay);
+    this.menuLevelSelectButton?.removeEventListener("click", this.handleMenuLevelSelect);
+    this.menuControlsButton?.removeEventListener("click", this.handleMenuControls);
+    this.levelSelectList?.removeEventListener("click", this.handleLevelOptionClick);
+    this.levelSelectBackButton?.removeEventListener("click", this.handleLevelSelectBack);
+    this.controlsBackButton?.removeEventListener("click", this.handleControlsBack);
     this.aliasForm?.removeEventListener("submit", this.handleAliasSubmit);
     this.aliasInput?.removeEventListener("keydown", this.handleAliasKeyDown);
     this.modal?.hide();
     this.gameSidebar?.destroy();
     this.sketch?.remove();
-    this.video?.remove();
-
-    const tracks = this.cameraStream?.getTracks?.() ?? [];
-    tracks.forEach((track) => track.stop());
-    this.cameraStream = null;
+    this.stopVideoStream();
+    this.classifier = null;
+    this.flipCanvas = null;
+    this.flipContext = null;
   }
 }

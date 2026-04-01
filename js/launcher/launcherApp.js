@@ -56,7 +56,7 @@ export class LauncherApp {
           title: "Gravity Weaver",
           tag: "Nuevo puzzle",
           description: "Puzzle fisico neon donde manipulas la gravedad por poses de mano o con flechas como respaldo.",
-          cover: "./assets/launcher/duel-cover.png",
+          cover: "./assets/games/gravityWeaver/backgrounds/BG1.png",
         },
         {
           id: "ufro-volley",
