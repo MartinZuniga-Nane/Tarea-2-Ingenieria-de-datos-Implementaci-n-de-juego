@@ -52,6 +52,20 @@ export class Router {
           router: this,
           payload,
         });
+      } else if (route === "ufro-volley") {
+        const { UfroVolleyGame } = await import("./games/ufroVolley/ufroVolleyGame.js");
+        this.currentView = new UfroVolleyGame({
+          root: this.root,
+          router: this,
+          payload,
+        });
+      } else if (route === "ufro-basket") {
+        const { UfroBasketGame } = await import("./games/ufroBasket/ufroBasketGame.js");
+        this.currentView = new UfroBasketGame({
+          root: this.root,
+          router: this,
+          payload,
+        });
       } else if (route === "gravity-weaver") {
         const { GravityWeaverScene } = await import("./games/gravityWeaver/gravityWeaverScene.js");
         this.currentView = new GravityWeaverScene({

@@ -24,6 +24,8 @@ export class LauncherApp {
             <li><button class="launcher__menu-btn" type="button" data-route="duel">Duel</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-ninja">Ufro Ninja</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-dash">UfroDash</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="ufro-volley">UfroVolley</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="ufro-basket">UfroBasket</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-jump">Ufro Jump</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="gravity-weaver">Gravity Weaver</button></li>
           </ul>
@@ -55,6 +57,22 @@ export class LauncherApp {
           tag: "Nuevo puzzle",
           description: "Puzzle fisico neon donde manipulas la gravedad por poses de mano o con flechas como respaldo.",
           cover: "./assets/launcher/duel-cover.png",
+        },
+        {
+          id: "ufro-volley",
+          title: "UfroVolley",
+          tag: "2v2 fisico",
+          description: "Voleibol caotico 2v2 con gatos contra perros, salto sincronizado por equipo y fisica torpe sin azar.",
+          cover: "./assets/games/ufroVolley/volleyAssets/fondo cancha.png",
+        },
+        {
+          id: "ufro-basket",
+          title: "UfroBasket",
+          tag: "Tiro arcade",
+          description: "Basket libre infinito con barra de potencia, tiro por clasificador local y soporte de teclado con espacio.",
+          cover: "./assets/games/ufroBasket/assets/fondo.jpg",
+          meta: "p5.js + ml5.js imageClassifier",
+          details: "Cierra el puño para cargar, abre la mano para soltar y encadena canastas perfectas sin limite.",
         },
         {
           id: "ufro-ninja",

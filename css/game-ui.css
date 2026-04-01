@@ -139,6 +139,95 @@
   justify-content: flex-end;
 }
 
+.game-shell__tm-panel {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 12;
+  width: min(280px, 42vw);
+  padding: 0.9rem;
+  pointer-events: auto;
+}
+
+.ufrobasket-shell .game-shell__tm-panel {
+  left: 1rem;
+  right: auto;
+}
+
+.ufrobasket-shell .game-sidebar {
+  left: auto;
+  right: 0.9rem;
+}
+
+.ufrobasket-shell .game-sidebar__panel {
+  left: auto;
+  right: calc(100% + 0.6rem);
+}
+
+.ufrobasket-shell .pill {
+  text-shadow:
+    -1px -1px 0 rgba(9, 16, 28, 0.9),
+    1px -1px 0 rgba(9, 16, 28, 0.9),
+    -1px 1px 0 rgba(9, 16, 28, 0.9),
+    1px 1px 0 rgba(9, 16, 28, 0.9);
+}
+
+.game-shell__tm-title {
+  margin-bottom: 0.65rem;
+  font-family: "Space Grotesk", sans-serif;
+  font-size: 0.98rem;
+}
+
+.game-shell__tm-webcam {
+  overflow: hidden;
+  border-radius: 16px;
+  background: rgba(5, 10, 18, 0.84);
+  aspect-ratio: 1 / 1;
+}
+
+.game-shell__tm-webcam canvas,
+.game-shell__tm-webcam video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.game-shell__tm-webcam video {
+  transform: scaleX(-1);
+}
+
+.game-shell__tm-status {
+  margin-top: 0.7rem;
+  color: var(--text-soft);
+  font-size: 0.9rem;
+}
+
+.game-shell__tm-button {
+  width: 100%;
+  margin-top: 0.75rem;
+  justify-content: center;
+}
+
+.game-shell__tm-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.game-shell__tm-labels {
+  margin-top: 0.7rem;
+  display: grid;
+  gap: 0.28rem;
+  color: var(--text-soft);
+  font-size: 0.83rem;
+}
+
+.game-shell__tm-label {
+  padding: 0.3rem 0.45rem;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
 .game-sidebar {
   position: absolute;
   left: 0.9rem;
@@ -240,7 +329,8 @@
   }
 
   .game-shell__camera,
-  .game-shell__debug {
+  .game-shell__debug,
+  .game-shell__tm-panel {
     position: static;
     margin: 0 1rem 1rem;
     width: auto;

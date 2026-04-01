@@ -779,6 +779,7 @@ export class UfroDashGame {
   }
 
   drawHud(p5) {
+    const progressLabel = `${Math.round(this.progress * 100)}%`;
     p5.push();
     p5.noStroke();
     p5.fill("rgba(4, 12, 24, 0.42)");
@@ -789,7 +790,7 @@ export class UfroDashGame {
     p5.textAlign(p5.RIGHT, p5.CENTER);
     p5.textFont("IBM Plex Sans");
     p5.textSize(16);
-    p5.text(`${Math.round(this.progress * 100)}%`, 290, 82);
+    p5.text(progressLabel, 260, 82);
     p5.pop();
   }
 
