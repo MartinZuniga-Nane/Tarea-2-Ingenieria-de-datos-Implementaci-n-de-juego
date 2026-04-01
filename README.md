@@ -3,7 +3,10 @@
 Proyecto web modular en JavaScript puro con `p5.js` y `ml5.js` para un launcher estilo biblioteca y un juego de duelo controlado por gestos.
 
 ## Como correrlo
+Opción A:
+- Utilizar docker compose up --build en la raiz
 
+Opción B:
 - Sirvelo con un servidor estatico local. No abras `index.html` directo porque el proyecto usa modulos ES y camara.
 - Opcion simple: VS Code + Live Server.
 - Opcion Node: `npx serve .` o cualquier servidor estatico equivalente.
