@@ -59,6 +59,13 @@ export class Router {
           router: this,
           payload,
         });
+      } else if (route === "ufro-jump") {
+        const { UfroJumpScene } = await import("./games/ufroJump/ufroJump.js");
+        this.currentView = new UfroJumpScene({
+          root: this.root,
+          router: this,
+          payload,
+        });
       } else {
         this.currentView = new LauncherApp({
           root: this.root,

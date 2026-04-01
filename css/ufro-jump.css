@@ -1,0 +1,19 @@
+.ufro-jump-shell .game-shell__canvas {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(circle at 18% 14%, rgba(126, 179, 255, 0.16), transparent 38%),
+    radial-gradient(circle at 84% 26%, rgba(160, 255, 214, 0.12), transparent 34%),
+    linear-gradient(180deg, #0d1626 0%, #0a1321 54%, #08101c 100%);
+}
+
+.ufro-jump-shell .game-shell__canvas canvas {
+  border-radius: 16px;
+  border: 1px solid rgba(165, 212, 255, 0.3);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.45);
+  margin: 0 auto;
+}
+
+.ufro-jump-shell .game-shell__camera {
+  border-color: rgba(165, 212, 255, 0.36);
+}
