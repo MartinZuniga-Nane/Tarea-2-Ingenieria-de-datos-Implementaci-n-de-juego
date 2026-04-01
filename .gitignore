@@ -20,3 +20,8 @@ node_modules/
 # Local agent instructions
 AGENTS.md
 AGENTS.MD
+
+# Gravity Weaver model artifacts and local docs
+assets/games/gravityWeaver/modelo/
+GRAVITY_WEAVER_MODELO.md
+GRAVITY_WEAVER_LAYOUT_LOCAL.md

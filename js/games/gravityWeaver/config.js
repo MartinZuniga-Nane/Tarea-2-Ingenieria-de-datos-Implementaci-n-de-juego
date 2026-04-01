@@ -4,9 +4,23 @@ export const gravityWeaverConfig = {
     height: 720,
     minHeight: 540,
   },
-  ml: {
-    gesturePersistenceMs: 220,
-    minGestureConfidence: 0.58,
+  model: {
+    path: "https://teachablemachine.withgoogle.com/models/BR6g4qGy7/model.json",
+    metadataPath: "https://teachablemachine.withgoogle.com/models/BR6g4qGy7/metadata.json",
+    classifyIntervalMs: 140,
+    loadTimeoutMs: 12000,
+  },
+  input: {
+    expectedLabels: ["izquierda", "derecha", "arriba", "abajo", "neutral"],
+    minConfidence: 0.6,
+    persistenceMs: 320,
+    labelToVector: {
+      izquierda: { x: -1, y: 0 },
+      derecha: { x: 1, y: 0 },
+      arriba: { x: 0, y: -1 },
+      abajo: { x: 0, y: 1 },
+      neutral: { x: 0, y: 0 },
+    },
   },
   score: {
     baseLevelScore: 1000,
@@ -77,11 +91,11 @@ export const gravityWeaverConfig = {
     },
   },
   physics: {
-    gravityForce: 1180,
-    gravityLerp: 0.12,
+    gravityForce: 760,
+    gravityLerp: 0.07,
     friction: 0.986,
-    maxSpeed: 740,
-    elasticity: 0.72,
+    maxSpeed: 520,
+    elasticity: 0.66,
   },
   astronaut: {
     radius: 18,
