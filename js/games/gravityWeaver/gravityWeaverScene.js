@@ -42,6 +42,7 @@ export class GravityWeaverScene {
 
     this.levels = gravityWeaverLevels;
     this.levelIndex = 0;
+    this.pendingStartLevelIndex = 0;
     this.levelStartedAt = 0;
     this.levelFinishedAt = 0;
 
@@ -127,6 +128,9 @@ export class GravityWeaverScene {
     this.handleAliasSubmit = this.handleAliasSubmit.bind(this);
     this.handleAliasKeyDown = this.handleAliasKeyDown.bind(this);
     this.handleMenuPlay = this.handleMenuPlay.bind(this);
+    this.handleMenuLevelSelect = this.handleMenuLevelSelect.bind(this);
+    this.handleLevelOptionClick = this.handleLevelOptionClick.bind(this);
+    this.handleLevelSelectBack = this.handleLevelSelectBack.bind(this);
     this.handleMenuControls = this.handleMenuControls.bind(this);
     this.handleControlsBack = this.handleControlsBack.bind(this);
 
@@ -178,14 +182,26 @@ export class GravityWeaverScene {
               <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Gravity Weaver</h3>
               <p style="margin:0;color:#aebad9;">Selecciona una opcion para comenzar.</p>
               <button data-role="menu-play" type="button" style="padding:10px 14px;border:none;border-radius:10px;background:#5f92ff;color:#f2f7ff;font-weight:600;cursor:pointer;">Jugar</button>
+              <button data-role="menu-level-select" type="button" style="padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Selector de nivel</button>
               <button data-role="menu-controls" type="button" style="padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Controles</button>
+            </div>
+          </section>
+          <section data-role="level-select-overlay" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
+            <div style="width:min(560px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:10px;pointer-events:auto;">
+              <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Selector de nivel</h3>
+              <p style="margin:0;color:#aebad9;">Elige el nivel de inicio de la campana.</p>
+              <div data-role="level-select-list" style="display:grid;gap:8px;"></div>
+              <button data-role="level-select-back" type="button" style="margin-top:6px;padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Volver</button>
             </div>
           </section>
           <section data-role="controls-overlay" class="hidden" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
             <div style="width:min(560px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:10px;pointer-events:auto;">
               <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Controles</h3>
               <p style="margin:0;color:#aebad9;">Teclado: flechas para mover gravedad, R para reiniciar, Esc para salir.</p>
-              <p style="margin:0;color:#aebad9;">HandPose: indice izquierda/derecha, tres dedos (arriba), dos dedos (abajo), palma abierta (neutral).</p>
+              <p style="margin:0;color:#aebad9;">Izquierda: Apuntar con el indice a la izquierda.</p>
+              <p style="margin:0;color:#aebad9;">Derecha: Apuntar con el indice a la derecha.</p>
+              <p style="margin:0;color:#aebad9;">Arriba: La palma de la mano hacia adelante con los dedos apuntando hacia arriba.</p>
+              <p style="margin:0;color:#aebad9;">Abajo: Apuntar con todos los dedos para abajo.</p>
               <button data-role="controls-back" type="button" style="margin-top:6px;padding:10px 14px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;">Volver</button>
             </div>
           </section>
@@ -210,8 +226,12 @@ export class GravityWeaverScene {
     this.cameraPanel = this.root.querySelector('[data-role="camera-panel"]');
     this.menuOverlay = this.root.querySelector('[data-role="menu-overlay"]');
     this.controlsOverlay = this.root.querySelector('[data-role="controls-overlay"]');
+    this.levelSelectOverlay = this.root.querySelector('[data-role="level-select-overlay"]');
+    this.levelSelectList = this.root.querySelector('[data-role="level-select-list"]');
     this.menuPlayButton = this.root.querySelector('[data-role="menu-play"]');
+    this.menuLevelSelectButton = this.root.querySelector('[data-role="menu-level-select"]');
     this.menuControlsButton = this.root.querySelector('[data-role="menu-controls"]');
+    this.levelSelectBackButton = this.root.querySelector('[data-role="level-select-back"]');
     this.controlsBackButton = this.root.querySelector('[data-role="controls-back"]');
     this.aliasOverlay = this.root.querySelector('[data-role="alias-overlay"]');
     this.aliasForm = this.root.querySelector('[data-role="alias-form"]');
@@ -226,8 +246,12 @@ export class GravityWeaverScene {
     this.topbar?.classList.add("hidden");
     this.debugPanel?.classList.add("hidden");
     this.cameraPanel?.classList.add("hidden");
+    this.renderLevelSelectList();
     this.menuPlayButton?.addEventListener("click", this.handleMenuPlay);
+    this.menuLevelSelectButton?.addEventListener("click", this.handleMenuLevelSelect);
     this.menuControlsButton?.addEventListener("click", this.handleMenuControls);
+    this.levelSelectList?.addEventListener("click", this.handleLevelOptionClick);
+    this.levelSelectBackButton?.addEventListener("click", this.handleLevelSelectBack);
     this.controlsBackButton?.addEventListener("click", this.handleControlsBack);
     this.aliasForm?.addEventListener("submit", this.handleAliasSubmit);
     this.aliasInput?.addEventListener("keydown", this.handleAliasKeyDown);
@@ -337,12 +361,14 @@ export class GravityWeaverScene {
       this.aliasError.textContent = "";
     }
     this.aliasOverlay?.classList.add("hidden");
-    this.resetCampaignProgress();
+    this.resetCampaignProgress(this.pendingStartLevelIndex);
     this.enter();
   }
 
   handleMenuPlay() {
+    this.pendingStartLevelIndex = 0;
     this.menuOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
     this.controlsOverlay?.classList.add("hidden");
     this.aliasOverlay?.classList.remove("hidden");
     this.state = "awaiting-alias";
@@ -350,8 +376,48 @@ export class GravityWeaverScene {
     this.aliasInput?.focus();
   }
 
+  handleMenuLevelSelect() {
+    this.menuOverlay?.classList.add("hidden");
+    this.controlsOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.remove("hidden");
+    this.state = "menu-level-select";
+    this.statusPill.textContent = "Selecciona un nivel de inicio";
+  }
+
+  handleLevelOptionClick(event) {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    const button = target.closest('[data-level-index]');
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+
+    const parsed = Number(button.dataset.levelIndex);
+    if (!Number.isInteger(parsed)) {
+      return;
+    }
+
+    this.pendingStartLevelIndex = clamp(parsed, 0, this.levels.length - 1);
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.aliasOverlay?.classList.remove("hidden");
+    this.state = "awaiting-alias";
+    this.statusPill.textContent = `Ingresa tu alias para iniciar en Nivel ${this.pendingStartLevelIndex + 1}`;
+    this.aliasInput?.focus();
+  }
+
+  handleLevelSelectBack() {
+    this.levelSelectOverlay?.classList.add("hidden");
+    this.menuOverlay?.classList.remove("hidden");
+    this.state = "menu";
+    this.statusPill.textContent = "Selecciona una opcion para comenzar";
+  }
+
   handleMenuControls() {
     this.menuOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
     this.controlsOverlay?.classList.remove("hidden");
     this.state = "menu-controls";
     this.statusPill.textContent = "Revisa los controles";
@@ -359,9 +425,20 @@ export class GravityWeaverScene {
 
   handleControlsBack() {
     this.controlsOverlay?.classList.add("hidden");
+    this.levelSelectOverlay?.classList.add("hidden");
     this.menuOverlay?.classList.remove("hidden");
     this.state = "menu";
     this.statusPill.textContent = "Selecciona una opcion para comenzar";
+  }
+
+  renderLevelSelectList() {
+    if (!this.levelSelectList) {
+      return;
+    }
+
+    this.levelSelectList.innerHTML = this.levels.map((level, index) => (
+      `<button data-level-index="${index}" type="button" style="padding:10px 12px;border:1px solid rgba(140,173,255,0.45);border-radius:10px;background:rgba(10,16,34,0.9);color:#ebf2ff;font-weight:600;cursor:pointer;text-align:left;">Nivel ${index + 1}: ${level.title}</button>`
+    )).join("");
   }
 
   handleAliasKeyDown(event) {
@@ -373,8 +450,8 @@ export class GravityWeaverScene {
     this.aliasForm?.requestSubmit();
   }
 
-  resetCampaignProgress() {
-    this.levelIndex = 0;
+  resetCampaignProgress(startLevelIndex = 0) {
+    this.levelIndex = clamp(startLevelIndex, 0, this.levels.length - 1);
     this.metrics.attempts = 1;
     this.score.campaignTotal = 0;
     this.score.levelCurrent = 0;
@@ -435,7 +512,7 @@ export class GravityWeaverScene {
       return;
     }
 
-    if (this.state === "menu" || this.state === "menu-controls" || this.state === "awaiting-alias") {
+    if (this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       this.updateDebugPanel();
       return;
     }
@@ -1007,6 +1084,12 @@ export class GravityWeaverScene {
     if (label === "RIGHT_INDEX") {
       return { x: 1, y: 0 };
     }
+    if (label === "OPEN_PALM") {
+      return { x: 0, y: -1 };
+    }
+    if (label === "FOUR_FINGERS") {
+      return { x: 0, y: 1 };
+    }
     if (label === "THREE_FINGERS") {
       return { x: 0, y: -1 };
     }
@@ -1059,13 +1142,19 @@ export class GravityWeaverScene {
       return;
     }
 
+    if (this.state === "menu-level-select" && event.code === "Enter") {
+      event.preventDefault();
+      this.handleLevelSelectBack();
+      return;
+    }
+
     if (this.state === "menu-controls" && event.code === "Enter") {
       event.preventDefault();
       this.handleControlsBack();
       return;
     }
 
-    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-controls" || this.state === "awaiting-alias") {
+    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       return;
     }
 
@@ -1090,7 +1179,7 @@ export class GravityWeaverScene {
   }
 
   handleKeyUp(event) {
-    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-controls" || this.state === "awaiting-alias") {
+    if (!this.aliasConfirmed || this.state === "menu" || this.state === "menu-level-select" || this.state === "menu-controls" || this.state === "awaiting-alias") {
       return;
     }
 
@@ -1125,6 +1214,11 @@ export class GravityWeaverScene {
   updateStatusText() {
     if (this.state === "menu-controls") {
       this.statusPill.textContent = "Revisa los controles";
+      return;
+    }
+
+    if (this.state === "menu-level-select") {
+      this.statusPill.textContent = "Selecciona un nivel de inicio";
       return;
     }
 
@@ -1182,7 +1276,10 @@ export class GravityWeaverScene {
     this.exit();
     this.teardownKeyboardListeners();
     this.menuPlayButton?.removeEventListener("click", this.handleMenuPlay);
+    this.menuLevelSelectButton?.removeEventListener("click", this.handleMenuLevelSelect);
     this.menuControlsButton?.removeEventListener("click", this.handleMenuControls);
+    this.levelSelectList?.removeEventListener("click", this.handleLevelOptionClick);
+    this.levelSelectBackButton?.removeEventListener("click", this.handleLevelSelectBack);
     this.controlsBackButton?.removeEventListener("click", this.handleControlsBack);
     this.aliasForm?.removeEventListener("submit", this.handleAliasSubmit);
     this.aliasInput?.removeEventListener("keydown", this.handleAliasKeyDown);

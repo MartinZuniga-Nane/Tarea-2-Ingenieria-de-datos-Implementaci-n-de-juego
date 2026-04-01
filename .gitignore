@@ -20,3 +20,9 @@ node_modules/
 # Local agent instructions
 AGENTS.md
 AGENTS.MD
+
+# Project docs generated for delivery
+JUEGOS_Y_METODOS.md
+
+# CI workflow (local placeholder)
+.github/workflows/ci.yml
