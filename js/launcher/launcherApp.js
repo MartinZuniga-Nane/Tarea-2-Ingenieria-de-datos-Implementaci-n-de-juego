@@ -26,6 +26,7 @@ export class LauncherApp {
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-dash">UfroDash</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-volley">UfroVolley</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="ufro-basket">UfroBasket</button></li>
+            <li><button class="launcher__menu-btn" type="button" data-route="ufro-jump">Ufro Jump</button></li>
             <li><button class="launcher__menu-btn" type="button" data-route="gravity-weaver">Gravity Weaver</button></li>
           </ul>
         </section>
@@ -76,11 +77,20 @@ export class LauncherApp {
         {
           id: "ufro-ninja",
           title: "Ufro Ninja",
-          tag: "Arcade IA",
+          tag: "Arcade",
           description: "Arcade estilo fruit ninja por gestos con clasificador de Teachable Machine y camara en vivo.",
           meta: "p5.js + ml5.js imageClassifier",
-          cover: "./assets/launcher/duel-cover.png",
+          cover: "./assets/games/ufroNinja/modelo/logo/Logo.png",
           details: "Corta frutas con gesto de ataque, evita perder vidas y mejora tu puntaje en dificultad progresiva.",
+        },
+        {
+          id: "ufro-jump",
+          title: "Ufro Jump",
+          tag: "Nuevo arcade",
+          description: "Vertical jumper estilo Doodle Jump con clasificador de imagenes Teachable Machine.",
+          meta: "p5.js + ml5.js imageClassifier",
+          cover: "./assets/games/ufroJump/logo/Logo.png",
+          details: "Controla el salto lateral con etiquetas Uno, Dos y Tres para escalar de forma infinita.",
         },
       ],
       onPlay: (game) => this.router.navigate(game.id),
