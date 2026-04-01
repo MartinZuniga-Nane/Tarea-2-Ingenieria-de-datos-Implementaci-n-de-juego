@@ -21,6 +21,11 @@ node_modules/
 AGENTS.md
 AGENTS.MD
 
+# Gravity Weaver model artifacts and local docs
+assets/games/gravityWeaver/modelo/
+GRAVITY_WEAVER_MODELO.md
+GRAVITY_WEAVER_LAYOUT_LOCAL.md
+
 # Project docs generated for delivery
 JUEGOS_Y_METODOS.md
 

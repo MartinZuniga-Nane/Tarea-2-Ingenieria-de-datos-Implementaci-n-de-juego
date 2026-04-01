@@ -1,13 +1,58 @@
 import { Modal } from "../../shared/ui/modal.js";
 import { createGameSidebar } from "../../shared/ui/gameSidebar.js";
-import { HandposeAdapter } from "../../shared/input/handposeAdapter.js";
-import { GestureInterpreter } from "../../shared/input/gestureInterpreter.js";
 import { Astronaut } from "./astronaut.js";
 import { gravityWeaverConfig } from "./config.js";
 import { loadGravityWeaverAssets } from "./gravityWeaverAssets.js";
 import { LevelManager } from "./levelManager.js";
 import { loadLeaderboard, pushLeaderboardEntry } from "./scoreboard.js";
 import { gravityWeaverLevels } from "./levels.js";
+
+function normalizeLabel(rawLabel) {
+  if (!rawLabel) {
+    return "";
+  }
+
+  return String(rawLabel).trim().toLowerCase();
+}
+
+function resolveDrawableVideoSource(videoLike) {
+  if (!videoLike) {
+    return null;
+  }
+
+  return videoLike.elt || videoLike;
+}
+
+function isFinitePositive(value) {
+  return Number.isFinite(value) && value > 0;
+}
+
+function normalizeClassificationResults(payload) {
+  if (!payload) {
+    return [];
+  }
+
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (Array.isArray(payload.results)) {
+    return payload.results;
+  }
+
+  if (typeof payload === "object") {
+    const label = payload.label ?? payload.className ?? payload.class;
+    const confidence = payload.confidence ?? payload.probability ?? payload.score;
+    if (typeof label === "string") {
+      return [{
+        label,
+        confidence: Number.isFinite(confidence) ? confidence : 0,
+      }];
+    }
+  }
+
+  return [];
+}
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
@@ -134,11 +179,19 @@ export class GravityWeaverScene {
     this.handleMenuControls = this.handleMenuControls.bind(this);
     this.handleControlsBack = this.handleControlsBack.bind(this);
 
-    this.handpose = new HandposeAdapter();
-    this.gestureInterpreter = new GestureInterpreter();
-    this.stableGestureLabel = "NONE";
-    this.candidateGestureLabel = "NONE";
-    this.candidateGestureSince = 0;
+    this.classifier = null;
+    this.classifyTimeoutId = null;
+    this.modelMetadata = null;
+    this.modelLabelSet = null;
+    this.lastRawLabel = "neutral";
+    this.lastRawConfidence = 0;
+    this.stableInputLabel = "neutral";
+    this.candidateInputLabel = "neutral";
+    this.candidateInputSince = 0;
+    this.lastAcceptedInputLabel = "neutral";
+    this.pendingInputVector = null;
+    this.flipCanvas = null;
+    this.flipContext = null;
     this.video = null;
     this.destroyed = false;
     this.modal = null;
@@ -152,7 +205,7 @@ export class GravityWeaverScene {
         <div class="game-shell__hud">
           <div class="game-shell__topbar">
             <div class="pill" data-role="status">Inicializando Gravity Weaver...</div>
-            <div class="pill">Flechas = gravedad | R = reiniciar nivel | Esc = launcher</div>
+            <div class="pill">Flechas o gestos ML = gravedad | R = reiniciar nivel | Esc = launcher</div>
           </div>
           <aside class="game-shell__debug" data-role="debug-panel">
             <h3>Gravity Weaver</h3>
@@ -176,7 +229,9 @@ export class GravityWeaverScene {
               <dt>Estado camara</dt><dd data-role="ml-state">-</dd>
             </dl>
           </aside>
-          <aside class="game-shell__camera hidden" data-role="camera-panel"></aside>
+          <aside class="game-shell__camera hidden" data-role="camera-panel">
+            <div class="game-shell__camera-input" data-role="camera-input-overlay">Input: - | Conf: -</div>
+          </aside>
           <section data-role="menu-overlay" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(4,8,18,0.8);z-index:12;pointer-events:auto;">
             <div style="width:min(520px,92vw);padding:24px;border-radius:16px;background:rgba(8,13,28,0.95);border:1px solid rgba(120,170,255,0.45);display:flex;flex-direction:column;gap:12px;pointer-events:auto;">
               <h3 style="margin:0;color:#ebf2ff;font-size:28px;font-family:'Space Grotesk',sans-serif;">Gravity Weaver</h3>
@@ -224,6 +279,7 @@ export class GravityWeaverScene {
     this.topbar = this.root.querySelector(".game-shell__topbar");
     this.debugPanel = this.root.querySelector('[data-role="debug-panel"]');
     this.cameraPanel = this.root.querySelector('[data-role="camera-panel"]');
+    this.cameraInputOverlay = this.root.querySelector('[data-role="camera-input-overlay"]');
     this.menuOverlay = this.root.querySelector('[data-role="menu-overlay"]');
     this.controlsOverlay = this.root.querySelector('[data-role="controls-overlay"]');
     this.levelSelectOverlay = this.root.querySelector('[data-role="level-select-overlay"]');
@@ -292,7 +348,7 @@ export class GravityWeaverScene {
     this.statusPill.textContent = "Selecciona una opcion para comenzar";
 
     this.sketch = new window.p5(this.createSketch());
-    this.initializeHandpose();
+    this.initializeClassifier();
   }
 
   createSketch() {
@@ -529,10 +585,12 @@ export class GravityWeaverScene {
       this.targetGravity.y = keyboardVector.y;
       this.currentLabel = "Teclado";
     } else {
-      const handposeVector = this.getHandposeVector(now);
-      this.inputSource = this.mlState === "ready" ? "ml5 + HandPose" : "keyboard";
-      this.targetGravity.x = handposeVector.x;
-      this.targetGravity.y = handposeVector.y;
+      this.inputSource = this.mlState === "ready" ? "ml5 + imageClassifier" : "keyboard";
+      const classifierVector = this.consumeClassifierVector();
+      if (classifierVector) {
+        this.targetGravity.x = classifierVector.x;
+        this.targetGravity.y = classifierVector.y;
+      }
     }
 
     const deltaX = this.targetGravity.x - this.currentGravity.x;
@@ -1015,88 +1073,341 @@ export class GravityWeaverScene {
     this.targetGravity.y = 0;
   }
 
-  async initializeHandpose() {
+  async initializeClassifier() {
     try {
       this.mlState = "requesting-camera";
+      await this.loadModelMetadata();
+      this.video = await this.createVideoElement();
       this.mlState = "loading-model";
-      await this.handpose.init();
-      this.video = this.handpose.video;
+
       if (this.video) {
         this.cameraPanel.classList.remove("hidden");
         this.cameraPanel.appendChild(this.video);
       }
+
+      this.classifier = await this.createClassifier();
       this.mlState = "ready";
       this.currentLabel = "Neutral";
+      this.lastAcceptedInputLabel = "neutral";
+      this.pendingInputVector = this.mapInputLabelToVector("neutral");
+      this.scheduleClassification(0);
     } catch (error) {
       this.mlState = "fallback";
       this.currentLabel = "Neutral";
+      this.clearClassificationTimer();
+      this.stopVideoStream();
       this.modal.show({
-        title: "HandPose o camara no disponibles",
+        title: "Clasificador o camara no disponibles",
         message: "Gravity Weaver seguira con control de teclado (flechas).",
         dismissLabel: "Continuar",
         autoHideMs: 2600,
       });
-      console.warn("Gravity Weaver fallback activo (sin HandPose):", error?.message ?? error);
+      console.warn("Gravity Weaver fallback activo (sin clasificador):", error?.message ?? error);
     }
   }
 
-  getHandposeVector(now) {
-    if (this.mlState !== "ready" || this.handpose.status !== "ready") {
-      this.currentLabel = "Neutral";
-      return { x: 0, y: 0 };
+  async loadModelMetadata() {
+    const metadataPath = this.config.model.metadataPath;
+    if (!metadataPath) {
+      return;
     }
 
-    const prediction = this.handpose.getPrimaryPrediction();
-    const interpretation = this.gestureInterpreter.interpret(prediction);
-    const label = interpretation.label ?? "NONE";
-    const confidence = interpretation.confidence ?? 0;
-    const minConfidence = this.config.ml.minGestureConfidence ?? 0.58;
+    try {
+      const response = await fetch(metadataPath, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error(`No se pudo leer metadata (${response.status})`);
+      }
 
-    if (label !== this.candidateGestureLabel) {
-      this.candidateGestureLabel = label;
-      this.candidateGestureSince = now;
+      const metadata = await response.json();
+      const labels = Array.isArray(metadata?.labels) ? metadata.labels : [];
+      this.modelMetadata = metadata;
+      this.modelLabelSet = new Set(labels.map((label) => normalizeLabel(label)));
+    } catch (error) {
+      this.modelMetadata = null;
+      this.modelLabelSet = null;
+      console.warn("Gravity Weaver no pudo cargar metadata del modelo:", error?.message ?? error);
     }
-
-    if (label === "NONE") {
-      this.stableGestureLabel = "NONE";
-      this.currentLabel = "Neutral";
-      return { x: 0, y: 0 };
-    }
-
-    if (confidence < minConfidence) {
-      this.currentLabel = "Ruido";
-      return this.mapGestureToVector(this.stableGestureLabel);
-    }
-
-    const persistenceMs = this.config.ml.gesturePersistenceMs ?? 200;
-    if (now - this.candidateGestureSince >= persistenceMs) {
-      this.stableGestureLabel = label;
-    }
-
-    this.currentLabel = this.stableGestureLabel === "NONE" ? "Neutral" : this.stableGestureLabel;
-    return this.mapGestureToVector(this.stableGestureLabel);
   }
 
-  mapGestureToVector(label) {
-    if (label === "LEFT_INDEX") {
-      return { x: -1, y: 0 };
+  async createVideoElement() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Este navegador no soporta camara");
     }
-    if (label === "RIGHT_INDEX") {
-      return { x: 1, y: 0 };
+
+    const video = document.createElement("video");
+    video.className = "handpose-video";
+    video.setAttribute("playsinline", "true");
+    video.setAttribute("autoplay", "true");
+    video.muted = true;
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: "user" },
+      audio: false,
+    });
+
+    video.srcObject = stream;
+    await new Promise((resolve) => {
+      video.onloadedmetadata = () => {
+        video.play().catch(() => {});
+        resolve();
+      };
+    });
+
+    return video;
+  }
+
+  async createClassifier() {
+    if (!window.ml5?.imageClassifier) {
+      throw new Error("ml5.imageClassifier no esta disponible");
     }
-    if (label === "OPEN_PALM") {
-      return { x: 0, y: -1 };
+
+    const modelPath = new URL(this.config.model.path, window.location.href).href;
+
+    const classifier = await new Promise((resolve, reject) => {
+      let settled = false;
+      let classifierInstance = null;
+      const timeoutMs = this.config.model.loadTimeoutMs ?? 12000;
+      const timeoutId = window.setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        reject(new Error("El clasificador tardo demasiado en cargar"));
+      }, timeoutMs);
+
+      const finish = (instance) => {
+        if (settled || !instance) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeoutId);
+        resolve(instance);
+      };
+
+      const fail = (error) => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        window.clearTimeout(timeoutId);
+        reject(error);
+      };
+
+      try {
+        classifierInstance = window.ml5.imageClassifier(modelPath, () => finish(classifierInstance));
+        if (classifierInstance && typeof classifierInstance.then === "function") {
+          classifierInstance.then((resolved) => finish(resolved)).catch(fail);
+        }
+      } catch (error) {
+        fail(error);
+      }
+    });
+
+    if (typeof classifier.classify !== "function") {
+      throw new Error("El clasificador no expone el metodo classify");
     }
-    if (label === "FOUR_FINGERS") {
-      return { x: 0, y: 1 };
+
+    return classifier;
+  }
+
+  scheduleClassification(delayMs = this.config.model.classifyIntervalMs) {
+    this.clearClassificationTimer();
+    if (this.destroyed || !this.classifier || !this.video) {
+      return;
     }
-    if (label === "THREE_FINGERS") {
-      return { x: 0, y: -1 };
+
+    this.classifyTimeoutId = window.setTimeout(() => this.classifyFrame(), delayMs);
+  }
+
+  clearClassificationTimer() {
+    if (this.classifyTimeoutId) {
+      window.clearTimeout(this.classifyTimeoutId);
+      this.classifyTimeoutId = null;
     }
-    if (label === "TWO_FINGERS") {
-      return { x: 0, y: 1 };
+  }
+
+  classifyFrame() {
+    if (this.destroyed || !this.classifier || !this.video) {
+      return;
     }
-    return { x: 0, y: 0 };
+
+    const handleResults = (error, results) => {
+      if (error) {
+        console.warn("Gravity Weaver classifier error:", error?.message ?? error);
+        this.scheduleClassification(260);
+        return;
+      }
+
+      this.ingestClassification(normalizeClassificationResults(results));
+      this.scheduleClassification();
+    };
+
+    try {
+      const source = this.buildMirroredFrameSource();
+      if (!source) {
+        this.scheduleClassification(120);
+        return;
+      }
+
+      if (this.classifier.classify.length >= 2) {
+        this.classifier.classify(source, (arg1, arg2) => {
+          const resultsCandidate = arg1 instanceof Error ? arg2 : arg1;
+          const fallbackCandidate = arg2 instanceof Error ? arg1 : arg2;
+          const normalizedPrimary = normalizeClassificationResults(resultsCandidate);
+          const normalizedFallback = normalizeClassificationResults(fallbackCandidate);
+          const finalResults = normalizedPrimary.length > 0 ? normalizedPrimary : normalizedFallback;
+          const error = arg1 instanceof Error ? arg1 : (arg2 instanceof Error ? arg2 : null);
+          handleResults(error, finalResults);
+        });
+        return;
+      }
+
+      Promise.resolve(this.classifier.classify(source))
+        .then((results) => handleResults(null, results))
+        .catch((error) => handleResults(error, []));
+    } catch (error) {
+      handleResults(error, []);
+    }
+  }
+
+  buildMirroredFrameSource() {
+    const videoElement = resolveDrawableVideoSource(this.video);
+    const isHtmlVideo = typeof HTMLVideoElement !== "undefined" && videoElement instanceof HTMLVideoElement;
+    if (!isHtmlVideo) {
+      return null;
+    }
+
+    if (!isFinitePositive(videoElement.videoWidth) || !isFinitePositive(videoElement.videoHeight)) {
+      return null;
+    }
+
+    if (!this.flipCanvas) {
+      this.flipCanvas = document.createElement("canvas");
+      this.flipContext = this.flipCanvas.getContext("2d", { willReadFrequently: false });
+    }
+
+    const targetWidth = videoElement.videoWidth;
+    const targetHeight = videoElement.videoHeight;
+    if (this.flipCanvas.width !== targetWidth || this.flipCanvas.height !== targetHeight) {
+      this.flipCanvas.width = targetWidth;
+      this.flipCanvas.height = targetHeight;
+    }
+
+    if (!this.flipContext) {
+      return null;
+    }
+
+    this.flipContext.save();
+    this.flipContext.clearRect(0, 0, targetWidth, targetHeight);
+    this.flipContext.translate(targetWidth, 0);
+    this.flipContext.scale(-1, 1);
+    this.flipContext.drawImage(videoElement, 0, 0, targetWidth, targetHeight);
+    this.flipContext.restore();
+    return this.flipCanvas;
+  }
+
+  ingestClassification(results) {
+    const now = performance.now();
+    const topResult = Array.isArray(results) ? results[0] : null;
+    const rawLabel = topResult?.label ?? "neutral";
+    const normalizedLabel = normalizeLabel(rawLabel);
+    const rawConfidence = topResult?.confidence ?? 0;
+
+    this.lastRawLabel = rawLabel;
+    this.lastRawConfidence = rawConfidence;
+
+    if (!this.isKnownModelLabel(normalizedLabel)) {
+      this.currentLabel = `No mapeado: ${rawLabel}`;
+      return;
+    }
+
+    if (normalizedLabel !== this.candidateInputLabel) {
+      this.candidateInputLabel = normalizedLabel;
+      this.candidateInputSince = now;
+    }
+
+    const minConfidence = this.config.input.minConfidence ?? 0.6;
+    if (rawConfidence < minConfidence) {
+      this.currentLabel = `Ruido (${rawLabel})`;
+      return;
+    }
+
+    const persistenceMs = this.config.input.persistenceMs ?? 220;
+    if (now - this.candidateInputSince >= persistenceMs) {
+      this.stableInputLabel = normalizedLabel;
+      if (normalizedLabel !== this.lastAcceptedInputLabel) {
+        this.lastAcceptedInputLabel = normalizedLabel;
+        this.pendingInputVector = this.mapInputLabelToVector(normalizedLabel);
+      }
+    }
+
+    this.currentLabel = this.formatInputLabel(this.stableInputLabel);
+  }
+
+  isKnownModelLabel(normalizedLabel) {
+    if (!normalizedLabel) {
+      return false;
+    }
+
+    if (this.modelLabelSet?.size) {
+      return this.modelLabelSet.has(normalizedLabel);
+    }
+
+    const fallbackExpected = this.config.input.expectedLabels ?? [];
+    return fallbackExpected.includes(normalizedLabel);
+  }
+
+  formatInputLabel(label) {
+    const normalized = normalizeLabel(label);
+    if (!normalized || normalized === "neutral") {
+      return "Neutral";
+    }
+
+    if (normalized === "izquierda") {
+      return "Izquierda";
+    }
+    if (normalized === "derecha") {
+      return "Derecha";
+    }
+    if (normalized === "arriba") {
+      return "Arriba";
+    }
+    if (normalized === "abajo") {
+      return "Abajo";
+    }
+
+    return String(label);
+  }
+
+  mapInputLabelToVector(label) {
+    const map = this.config.input.labelToVector ?? {};
+    const neutralVector = map.neutral ?? { x: 0, y: 0 };
+    const mappedVector = map[label] ?? neutralVector;
+    return {
+      x: mappedVector.x ?? 0,
+      y: mappedVector.y ?? 0,
+    };
+  }
+
+  consumeClassifierVector() {
+    if (this.mlState !== "ready") {
+      return this.mapInputLabelToVector("neutral");
+    }
+
+    if (!this.pendingInputVector) {
+      return null;
+    }
+
+    const vector = this.pendingInputVector;
+    this.pendingInputVector = null;
+    return vector;
+  }
+
+  stopVideoStream() {
+    const tracks = this.video?.srcObject?.getTracks?.() ?? [];
+    tracks.forEach((track) => track.stop());
+    this.video?.remove();
+    this.video = null;
   }
 
   getKeyboardVector() {
@@ -1258,6 +1569,14 @@ export class GravityWeaverScene {
     this.root.querySelector('[data-role="collision-count"]').textContent = String(this.metrics.collisions);
     this.root.querySelector('[data-role="attempt-count"]').textContent = String(this.metrics.attempts);
     this.root.querySelector('[data-role="ml-state"]').textContent = this.mlState;
+
+    const cameraInputText = this.currentLabel || "-";
+    const cameraConfidenceText = this.mlState === "ready"
+      ? `${Math.max(0, this.lastRawConfidence * 100).toFixed(1)}%`
+      : "-";
+    if (this.cameraInputOverlay) {
+      this.cameraInputOverlay.textContent = `Input: ${cameraInputText} | Conf: ${cameraConfidenceText}`;
+    }
   }
 
   handleRuntimeError(error) {
@@ -1274,6 +1593,7 @@ export class GravityWeaverScene {
   destroy() {
     this.destroyed = true;
     this.exit();
+    this.clearClassificationTimer();
     this.teardownKeyboardListeners();
     this.menuPlayButton?.removeEventListener("click", this.handleMenuPlay);
     this.menuLevelSelectButton?.removeEventListener("click", this.handleMenuLevelSelect);
@@ -1286,7 +1606,9 @@ export class GravityWeaverScene {
     this.modal?.hide();
     this.gameSidebar?.destroy();
     this.sketch?.remove();
-    this.handpose?.dispose();
-    this.video = null;
+    this.stopVideoStream();
+    this.classifier = null;
+    this.flipCanvas = null;
+    this.flipContext = null;
   }
 }
