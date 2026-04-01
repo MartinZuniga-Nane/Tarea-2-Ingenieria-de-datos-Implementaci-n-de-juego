@@ -14,7 +14,7 @@ export class LauncherApp {
       <aside class="launcher__sidebar">
         <div class="launcher__brand">
           <div class="pill">Arcade Library</div>
-          <h1>Tu galeria de duelos gestuales</h1>
+          <h1>Tu biblioteca de juegos gestuales</h1>
         </div>
 
         <section class="launcher__menu">
