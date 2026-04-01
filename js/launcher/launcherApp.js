@@ -49,7 +49,7 @@ export class LauncherApp {
           title: "UfroDash",
           tag: "Arcade runner",
           description: "Carrera inspirada en Geometry Dash con salto automatico, nivel propio y soporte de mano abierta para saltar.",
-          cover: "./assets/games/geometrydashassets/PC _ Computer - Geometry Dash - Backgrounds and Grounds - Background 01.png",
+          cover: "./assets/games/geometrydashassets/UfroDash.jpg",
         },
         {
           id: "gravity-weaver",
